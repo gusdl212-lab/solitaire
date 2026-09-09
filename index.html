@@ -55,7 +55,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 @media(max-width:980px){.lobby-grid,.game-shell{grid-template-columns:1fr}.panel{height:auto;max-height:430px}.side-panel{min-height:auto}.board,.top-row{grid-template-columns:repeat(7,minmax(64px,1fr));gap:7px}.solitaire-wrap{overflow-x:auto}}
 @media(max-width:650px){body{padding:5px}.container{padding:9px}.board,.top-row{grid-template-columns:repeat(7,62px);min-width:476px}.card-ui{font-size:14px}.card-ui .big{font-size:22px}.solitaire-wrap{padding:9px}}
 
-/* ===== Solitaire v1.3 : 드래그앤드롭 / 카드 모션 / 깔끔한 UI ===== */
+/* ===== Solitaire v1.4 : 드래그앤드롭 / 카드 모션 / 깔끔한 UI ===== */
 .container{max-width:1280px}
 .solitaire-wrap{
   min-height:740px;
@@ -175,7 +175,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 }
 
 
-/* ===== Solitaire v1.3 : 규칙 안내 + 합법 이동 힌트 + 조작 안정화 ===== */
+/* ===== Solitaire v1.4 : 규칙 안내 + 합법 이동 힌트 + 조작 안정화 ===== */
 .legal-target{
   outline:3px solid #ffd166!important;
   outline-offset:3px;
@@ -219,12 +219,22 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 }
 .help b.rule-head{color:#66fcf1}
 
+/* ===== Solitaire v1.4 : 마지막 자동 완성 ===== */
+.auto-finish-flash{
+  animation:autoFinishFlash .34s ease-out;
+}
+@keyframes autoFinishFlash{
+  0%{transform:translateY(-8px) scale(1.06);filter:brightness(1.35)}
+  100%{transform:translateY(0) scale(1);filter:brightness(1)}
+}
+#auto-finish-btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+
 </style>
 </head>
 <body>
 <div class="container">
 <h1>🃏✨ 멀티 솔리테어 챌린지</h1>
-<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.3</span></div>
+<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.4</span></div>
 
 <div id="view-auth" class="card auth-box">
  <div id="form-login">
@@ -272,7 +282,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
  <div class="game-shell">
   <div class="solitaire-wrap">
    <div class="game-top">
-    <div><button class="btn-main" onclick="startNewGame()">🔄 새 게임</button> <button class="btn-gold" onclick="hintMove()">💡 가능한 수</button> <button class="btn-danger" onclick="backToLobby()">← 로비</button></div>
+    <div><button class="btn-main" onclick="startNewGame()">🔄 새 게임</button> <button class="btn-gold" onclick="hintMove()">💡 가능한 수</button> <button id="auto-finish-btn" class="btn-purple" onclick="autoFinish()">✨ 자동 완성</button> <button class="btn-danger" onclick="backToLobby()">← 로비</button></div>
     <div class="timer-box">⏱️ <span id="timer">00:00</span></div>
    </div>
    <div class="top-row">
@@ -310,7 +320,7 @@ const ONLINE_GRACE_MS=45000;
 const ONE_HOUR_MS=3600000;
 const RANK_PATH="solitaireRankings";
 let currentUser=null,globalData={users:{},lobbyChat:[],rankings:{}},syncInterval=null,heartbeatInterval=null;
-let game=null,timerInterval=null,startedAt=0,selected=null;
+let game=null,timerInterval=null,startedAt=0,selected=null,autoFinishing=false;
 
 function $(id){return document.getElementById(id)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
@@ -416,6 +426,7 @@ function makeDeck(){
 
 function startNewGame(){
  clearInterval(timerInterval);
+ autoFinishing=false;
  selected=null;
  dragState=null;
  const deck=makeDeck(),tableau=[[],[],[],[],[],[],[]];
@@ -972,6 +983,97 @@ function hintMove(){
   $('stock')?.classList.add('legal-target');return;
  }
  toastRule('현재 배치에서는 더 이상 가능한 수를 찾지 못했어요.');
+}
+
+
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+
+function canStartAutoFinish(){
+ if(!game||game.finished||autoFinishing)return false;
+ // 마지막 정리용 기능: 아래 7줄의 숨겨진 카드가 모두 열렸고,
+ // 왼쪽 위 덱(stock)까지 모두 소진된 뒤에만 실행한다.
+ if(game.tableau.some(col=>col.some(c=>!c.faceUp)))return false;
+ if(game.stock.length>0)return false;
+ return true;
+}
+
+async function autoFinish(){
+ if(!game||game.finished)return;
+
+ if(!canStartAutoFinish()){
+  if(game.tableau.some(col=>col.some(c=>!c.faceUp))){
+   toastRule('아직 뒤집히지 않은 카드가 있어요. 모든 숨은 카드를 먼저 열어주세요.');
+  }else if(game.stock.length>0){
+   toastRule('왼쪽 위 덱에 카드가 남아 있어요. 덱을 모두 확인한 뒤 자동 완성을 눌러주세요.');
+  }
+  return;
+ }
+
+ autoFinishing=true;
+ selected=null;
+ clearLegalTargets();
+ clearDropStyles();
+
+ const btn=$('auto-finish-btn');
+ if(btn){btn.disabled=true;btn.textContent='✨ 정리 중...';}
+
+ toastRule('남은 카드를 위쪽 무늬 칸으로 자동 정리할게요!');
+
+ let movedAny=true;
+ while(!game.finished&&movedAny){
+  movedAny=false;
+
+  // 폐기 더미 맨 위 카드가 올라갈 수 있으면 우선 이동
+  if(game.waste.length){
+   const c=game.waste[game.waste.length-1];
+   const fi=c.suit;
+   if(validFoundation(fi,c)){
+    game.waste.pop();
+    game.foundations[fi].push(c);
+    game.moves++;
+    movedAny=true;
+    lastMoveTarget=`#foundation-${fi}`;
+    renderGame();
+    const el=$('foundation-'+fi)?.querySelector('.card-ui');
+    if(el){el.classList.add('auto-finish-flash');}
+    await sleep(135);
+    checkWin();
+    continue;
+   }
+  }
+
+  // 각 tableau의 맨 위 카드 중 올릴 수 있는 카드를 한 장씩 이동
+  for(let ci=0;ci<7&&!game.finished;ci++){
+   const col=game.tableau[ci];
+   if(!col.length)continue;
+   const c=col[col.length-1];
+   if(!c.faceUp)continue;
+   const fi=c.suit;
+   if(!validFoundation(fi,c))continue;
+
+   col.pop();
+   game.foundations[fi].push(c);
+   game.moves++;
+   movedAny=true;
+   lastMoveTarget=`#foundation-${fi}`;
+   renderGame();
+   const el=$('foundation-'+fi)?.querySelector('.card-ui');
+   if(el){el.classList.add('auto-finish-flash');}
+   await sleep(135);
+   checkWin();
+   break;
+  }
+ }
+
+ if(!game.finished){
+  toastRule('아직 자동으로 끝낼 수 없는 카드가 남아 있어요. 몇 장만 직접 옮긴 뒤 다시 눌러주세요.');
+ }
+
+ autoFinishing=false;
+ if(btn){
+  btn.disabled=false;
+  btn.textContent='✨ 자동 완성';
+ }
 }
 
 function checkWin(){
