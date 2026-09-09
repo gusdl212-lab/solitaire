@@ -55,7 +55,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 @media(max-width:980px){.lobby-grid,.game-shell{grid-template-columns:1fr}.panel{height:auto;max-height:430px}.side-panel{min-height:auto}.board,.top-row{grid-template-columns:repeat(7,minmax(64px,1fr));gap:7px}.solitaire-wrap{overflow-x:auto}}
 @media(max-width:650px){body{padding:5px}.container{padding:9px}.board,.top-row{grid-template-columns:repeat(7,62px);min-width:476px}.card-ui{font-size:14px}.card-ui .big{font-size:22px}.solitaire-wrap{padding:9px}}
 
-/* ===== Solitaire v1.1 : 드래그앤드롭 / 카드 모션 / 깔끔한 UI ===== */
+/* ===== Solitaire v1.2 : 드래그앤드롭 / 카드 모션 / 깔끔한 UI ===== */
 .container{max-width:1280px}
 .solitaire-wrap{
   min-height:740px;
@@ -174,12 +174,57 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
   .tableau-col{min-height:500px}
 }
 
+
+/* ===== Solitaire v1.2 : 규칙 안내 + 합법 이동 힌트 + 조작 안정화 ===== */
+.legal-target{
+  outline:3px solid #ffd166!important;
+  outline-offset:3px;
+  box-shadow:0 0 18px rgba(255,209,102,.35)!important;
+}
+.legal-target:after{
+  content:'여기로';
+  position:absolute;
+  left:50%;bottom:-22px;
+  transform:translateX(-50%);
+  font-size:9px;
+  color:#ffd166;
+  font-weight:900;
+  white-space:nowrap;
+}
+.tableau-col.legal-target:after{bottom:auto;top:-18px}
+.card-ui.sequence-head{
+  outline:4px solid #66fcf1;
+  outline-offset:1px;
+}
+.rule-toast{
+  position:fixed;
+  left:50%;top:80px;
+  transform:translateX(-50%);
+  z-index:99999;
+  background:rgba(10,16,23,.96);
+  border:1px solid #66fcf1;
+  color:#eaf7f6;
+  border-radius:12px;
+  padding:10px 15px;
+  font-size:12px;
+  font-weight:800;
+  box-shadow:0 8px 30px rgba(0,0,0,.35);
+  pointer-events:none;
+  animation:ruleToast 1.45s forwards;
+}
+@keyframes ruleToast{
+  0%{opacity:0;transform:translate(-50%,-8px)}
+  15%,72%{opacity:1;transform:translate(-50%,0)}
+  100%{opacity:0;transform:translate(-50%,-5px)}
+}
+.help b.rule-head{color:#66fcf1}
+
 </style>
 </head>
 <body>
 <div class="container">
 <h1>🃏✨ 멀티 솔리테어 챌린지</h1>
-<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.1</span></div>
+<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.2</span></div>
 
 <div id="view-auth" class="card auth-box">
  <div id="form-login">
@@ -227,7 +272,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
  <div class="game-shell">
   <div class="solitaire-wrap">
    <div class="game-top">
-    <div><button class="btn-main" onclick="startNewGame()">🔄 새 게임</button> <button class="btn-danger" onclick="backToLobby()">← 로비</button></div>
+    <div><button class="btn-main" onclick="startNewGame()">🔄 새 게임</button> <button class="btn-gold" onclick="hintMove()">💡 가능한 수</button> <button class="btn-danger" onclick="backToLobby()">← 로비</button></div>
     <div class="timer-box">⏱️ <span id="timer">00:00</span></div>
    </div>
    <div class="top-row">
@@ -453,8 +498,8 @@ function renderGame(){
   el.ondragleave=()=>clearDropStyles();
 
   el.innerHTML=f.length
-   ? `<div onclick="event.stopPropagation();selectFoundation(${i})">${cardHTML(f[f.length-1],'f',i,null)}</div>`
-   : `<div class="slot" onclick="moveSelectedToFoundation(${i})"><span class="foundation-label">${SUITS[i].s}</span></div>`;
+   ? `<div onclick="event.stopPropagation();foundationClick(${i})">${cardHTML(f[f.length-1],'f',i,null)}</div>`
+   : `<div class="slot" onclick="foundationClick(${i})"><span class="foundation-label">${SUITS[i].s}</span></div>`;
  }
 
  // Tableau
@@ -513,11 +558,7 @@ function getSourceCards(source){
   const col=game.tableau[source.a];
   if(!col||source.b<0||source.b>=col.length)return null;
   const cards=col.slice(source.b);
-  if(!cards.length||!cards[0].faceUp)return null;
-  // sequence itself must be valid
-  for(let i=0;i<cards.length-1;i++){
-   if(!validTableau(cards[i],cards[i+1]))return null;
-  }
+  if(!isValidSequence(cards))return null;
   return cards;
  }
  return null;
@@ -555,6 +596,50 @@ function validFoundation(fi,card){
  return f[f.length-1].rank+1===card.rank;
 }
 
+function isValidSequence(cards){
+ if(!cards||!cards.length||!cards[0].faceUp)return false;
+ for(let i=0;i<cards.length-1;i++){
+  const upper=cards[i],lower=cards[i+1];
+  if(!lower.faceUp)return false;
+  if(upper.rank!==lower.rank+1)return false;
+  if(SUITS[upper.suit].red===SUITS[lower.suit].red)return false;
+ }
+ return true;
+}
+
+function toastRule(msg){
+ document.querySelector('.rule-toast')?.remove();
+ const el=document.createElement('div');
+ el.className='rule-toast';
+ el.textContent=msg;
+ document.body.appendChild(el);
+ setTimeout(()=>el.remove(),1500);
+}
+
+function clearLegalTargets(){
+ document.querySelectorAll('.legal-target').forEach(el=>el.classList.remove('legal-target'));
+}
+
+function showLegalTargets(source){
+ clearLegalTargets();
+ const cards=getSourceCards(source);
+ if(!cards||!cards.length)return;
+ const first=cards[0];
+
+ for(let ci=0;ci<7;ci++){
+  if(source.type==='t'&&source.a===ci)continue;
+  const dest=game.tableau[ci],top=dest[dest.length-1];
+  if(validTableau(top,first)){
+   document.querySelector(`.tableau-col[data-col="${ci}"]`)?.classList.add('legal-target');
+  }
+ }
+
+ if(cards.length===1){
+  const fi=first.suit;
+  if(validFoundation(fi,first))$('foundation-'+fi)?.classList.add('legal-target');
+ }
+}
+
 function flipTop(ci){
  const col=game.tableau[ci];
  if(col.length&&!col[col.length-1].faceUp)col[col.length-1].faceUp=true;
@@ -574,35 +659,55 @@ function flipTableauTop(ci){
 
 function selectWaste(){
  if(!game.waste.length)return;
- if(selected?.type==='w')selected=null;
- else selected={type:'w',a:null,b:null};
+ if(selected?.type==='w'){selected=null;clearLegalTargets();renderGame();return}
+ selected={type:'w',a:null,b:null};
  renderGame();
+ setTimeout(()=>showLegalTargets(selected),0);
 }
+function foundationClick(i){
+ if(selected){
+  if(moveSelectedToFoundation(i))return;
+ }
+ selectFoundation(i);
+}
+
 function selectFoundation(i){
  const f=game.foundations[i];
  if(!f.length)return;
- if(selected?.type==='f'&&selected.a===i)selected=null;
- else selected={type:'f',a:i,b:null};
+ if(selected?.type==='f'&&selected.a===i){selected=null;clearLegalTargets();renderGame();return}
+ selected={type:'f',a:i,b:null};
  renderGame();
+ setTimeout(()=>showLegalTargets(selected),0);
 }
 
 function selectTableau(ci,ri){
- const c=game.tableau[ci][ri];
+ const col=game.tableau[ci],c=col[ri];
  if(!c.faceUp){
-  if(ri===game.tableau[ci].length-1)flipTableauTop(ci);
+  if(ri===col.length-1)flipTableauTop(ci);
   return;
  }
 
- // clicking a destination while something is selected
+ // 이미 선택된 카드가 있으면 우선 현재 열을 목적지로 시도한다.
  if(selected&&!isSelected('t',ci,ri)){
   if(tryMoveSelectedToTableau(ci)){
+   clearLegalTargets();
    lastMoveTarget=`.tableau-col[data-col="${ci}"]`;
    renderGame();checkWin();return;
   }
  }
 
+ const candidate=col.slice(ri);
+ if(!isValidSequence(candidate)){
+  selected=null;
+  clearLegalTargets();
+  renderGame();
+  toastRule('이 카드 아래 묶음이 빨강/검정 교차 내림차순이 아니라 함께 옮길 수 없어요.');
+  return;
+ }
+
  selected={type:'t',a:ci,b:ri};
  renderGame();
+ setTimeout(()=>showLegalTargets(selected),0);
 }
 
 function tableauEmptyClick(ci,e){
@@ -624,12 +729,15 @@ function tryMoveSelectedToTableau(ci){
  const top=dest[dest.length-1];
  if(!validTableau(top,cards[0])){
   shakeTarget(`.tableau-col[data-col="${ci}"]`);
+  if(!top&&cards[0].rank!==13)toastRule('빈 줄에는 K(킹)부터 놓을 수 있어요.');
+  else if(top)toastRule('아래 줄은 빨강/검정 교차 + 한 단계 낮은 숫자만 놓을 수 있어요.');
   return false;
  }
 
  const moved=detachSource(selected);
  dest.push(...moved);
  selected=null;
+ clearLegalTargets();
  game.moves++;
  return true;
 }
@@ -641,12 +749,15 @@ function moveSelectedToFoundation(fi){
 
  if(!validFoundation(fi,c)){
   shakeTarget(`#foundation-${fi}`);
+  if(c.suit!==fi)toastRule('오른쪽 위 칸은 같은 무늬 카드만 올릴 수 있어요.');
+  else toastRule('오른쪽 위는 A부터 같은 무늬 오름차순으로 쌓아야 해요.');
   return false;
  }
 
  const moved=detachSource(selected)[0];
  game.foundations[fi].push(moved);
  selected=null;
+ clearLegalTargets();
  game.moves++;
  lastMoveTarget=`#foundation-${fi}`;
  renderGame();
@@ -698,11 +809,14 @@ function startCardDrag(e,type,a,b){
  const source={type,a,b};
  const cards=getSourceCards(source);
  if(!cards||!cards.length){
-  e.preventDefault();return;
+  e.preventDefault();
+  toastRule('이 카드 묶음은 규칙상 함께 움직일 수 없어요.');
+  return;
  }
 
  dragState=source;
  selected=source;
+ showLegalTargets(source);
 
  e.dataTransfer.effectAllowed='move';
  e.dataTransfer.setData('text/plain',JSON.stringify(source));
@@ -802,6 +916,63 @@ function clearDropStyles(){
 /* ---------- Touch / Pointer fallback ---------- */
 /* 모바일에서는 클릭 선택 방식이 그대로 동작하고,
    데스크톱에서는 native drag-and-drop을 사용한다. */
+
+
+function hintMove(){
+ if(!game)return;
+
+ // waste -> foundation/tableau
+ if(game.waste.length){
+  const c=game.waste[game.waste.length-1];
+  if(validFoundation(c.suit,c)){
+   toastRule(`폐기 더미의 ${cardText(c)} → 오른쪽 위 ${SUITS[c.suit].s}`);
+   $('foundation-'+c.suit)?.classList.add('legal-target');return;
+  }
+  for(let ci=0;ci<7;ci++){
+   const d=game.tableau[ci],top=d[d.length-1];
+   if(validTableau(top,c)){
+    toastRule(`폐기 더미의 ${cardText(c)} → 아래 ${ci+1}번째 줄`);
+    document.querySelector(`.tableau-col[data-col="${ci}"]`)?.classList.add('legal-target');return;
+   }
+  }
+ }
+
+ // tableau -> foundation/tableau
+ for(let si=0;si<7;si++){
+  const col=game.tableau[si];
+  if(!col.length)continue;
+
+  const top=col[col.length-1];
+  if(top.faceUp&&validFoundation(top.suit,top)){
+   toastRule(`${cardText(top)} → 오른쪽 위 ${SUITS[top.suit].s}`);
+   $('foundation-'+top.suit)?.classList.add('legal-target');return;
+  }
+
+  for(let ri=0;ri<col.length;ri++){
+   if(!col[ri].faceUp)continue;
+   const seq=col.slice(ri);
+   if(!isValidSequence(seq))continue;
+   for(let di=0;di<7;di++){
+    if(di===si)continue;
+    const dest=game.tableau[di],dtop=dest[dest.length-1];
+    if(validTableau(dtop,seq[0])){
+     toastRule(`${cardText(seq[0])}${seq.length>1?' 묶음':''} → 아래 ${di+1}번째 줄`);
+     document.querySelector(`.tableau-col[data-col="${di}"]`)?.classList.add('legal-target');return;
+    }
+   }
+  }
+ }
+
+ if(game.stock.length){
+  toastRule('현재 바로 옮길 수 있는 카드가 없어요. 왼쪽 위 덱을 한 장 열어보세요.');
+  $('stock')?.classList.add('legal-target');return;
+ }
+ if(game.waste.length){
+  toastRule('현재 수가 막혔어요. ↻로 덱을 다시 돌려보세요.');
+  $('stock')?.classList.add('legal-target');return;
+ }
+ toastRule('현재 배치에서는 더 이상 가능한 수를 찾지 못했어요.');
+}
 
 function checkWin(){
  if(game.foundations.every(f=>f.length===13))finishGame();
