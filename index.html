@@ -55,7 +55,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 @media(max-width:980px){.lobby-grid,.game-shell{grid-template-columns:1fr}.panel{height:auto;max-height:430px}.side-panel{min-height:auto}.board,.top-row{grid-template-columns:repeat(7,minmax(64px,1fr));gap:7px}.solitaire-wrap{overflow-x:auto}}
 @media(max-width:650px){body{padding:5px}.container{padding:9px}.board,.top-row{grid-template-columns:repeat(7,62px);min-width:476px}.card-ui{font-size:14px}.card-ui .big{font-size:22px}.solitaire-wrap{padding:9px}}
 
-/* ===== Solitaire v1.2 : 드래그앤드롭 / 카드 모션 / 깔끔한 UI ===== */
+/* ===== Solitaire v1.3 : 드래그앤드롭 / 카드 모션 / 깔끔한 UI ===== */
 .container{max-width:1280px}
 .solitaire-wrap{
   min-height:740px;
@@ -175,7 +175,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 }
 
 
-/* ===== Solitaire v1.2 : 규칙 안내 + 합법 이동 힌트 + 조작 안정화 ===== */
+/* ===== Solitaire v1.3 : 규칙 안내 + 합법 이동 힌트 + 조작 안정화 ===== */
 .legal-target{
   outline:3px solid #ffd166!important;
   outline-offset:3px;
@@ -224,7 +224,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 <body>
 <div class="container">
 <h1>🃏✨ 멀티 솔리테어 챌린지</h1>
-<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.2</span></div>
+<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.3</span></div>
 
 <div id="view-auth" class="card auth-box">
  <div id="form-login">
@@ -366,8 +366,8 @@ function renderGameMenu(){
  <a class="game-menu-item" href="https://gusdl212-lab.github.io/janggi/"><span class="game-icon">🀄</span><span class="game-name">장기</span></a>
  <div class="game-menu-divider"></div><div class="game-section-label">🎮 보드게임</div>
  <a class="game-menu-item sub" href="https://gusdl212-lab.github.io/party-game/"><span class="game-icon">🎮</span><span class="game-name">보드게임 라운지</span></a>
- <a class="game-menu-item sub" href="#"><span class="game-icon">🪵</span><span class="game-name">윷놀이</span></a>
- <a class="game-menu-item sub current" href="#"><span class="game-icon">🃏</span><span class="game-name">솔리테어</span><span class="current-badge">현재</span></a>
+ <a class="game-menu-item sub" href="https://gusdl212-lab.github.io/yutnori/"><span class="game-icon">🪵</span><span class="game-name">윷놀이</span></a>
+ <a class="game-menu-item sub current" href="https://gusdl212-lab.github.io/solitaire/"><span class="game-icon">🃏</span><span class="game-name">솔리테어</span><span class="current-badge">현재</span></a>
  </div>`;
 }
 function renderAdminList(){
