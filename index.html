@@ -54,12 +54,132 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 .finish-banner{background:rgba(255,209,102,.12);border:1px solid #ffd166;color:#ffd166;border-radius:10px;padding:10px;text-align:center;font-weight:900;margin-bottom:10px}
 @media(max-width:980px){.lobby-grid,.game-shell{grid-template-columns:1fr}.panel{height:auto;max-height:430px}.side-panel{min-height:auto}.board,.top-row{grid-template-columns:repeat(7,minmax(64px,1fr));gap:7px}.solitaire-wrap{overflow-x:auto}}
 @media(max-width:650px){body{padding:5px}.container{padding:9px}.board,.top-row{grid-template-columns:repeat(7,62px);min-width:476px}.card-ui{font-size:14px}.card-ui .big{font-size:22px}.solitaire-wrap{padding:9px}}
+
+/* ===== Solitaire v1.1 : 드래그앤드롭 / 카드 모션 / 깔끔한 UI ===== */
+.container{max-width:1280px}
+.solitaire-wrap{
+  min-height:740px;
+  padding:18px;
+  background:
+    radial-gradient(circle at 50% 18%,rgba(255,255,255,.05),transparent 32%),
+    linear-gradient(180deg,#0b7253,#07513c);
+}
+.game-shell{grid-template-columns:minmax(0,1fr) 310px}
+.top-row,.board{
+  grid-template-columns:repeat(7,minmax(90px,1fr));
+  gap:12px;
+}
+.slot,.pile{min-width:0}
+.slot{
+  border:2px dashed rgba(255,255,255,.25);
+  background:rgba(255,255,255,.025);
+  transition:.15s;
+}
+.slot.drop-ok,.tableau-col.drop-ok{
+  outline:3px solid #66fcf1;
+  outline-offset:3px;
+  background:rgba(102,252,241,.08);
+}
+.slot.drop-bad,.tableau-col.drop-bad{
+  outline:3px solid #ff6b6b;
+  outline-offset:3px;
+}
+.card-ui{
+  height:auto;
+  min-height:120px;
+  border-radius:10px;
+  padding:7px;
+  box-shadow:0 4px 9px rgba(0,0,0,.3);
+  transition:transform .12s,box-shadow .12s,filter .12s;
+  touch-action:none;
+}
+.card-ui:hover{
+  transform:translateY(-2px);
+  box-shadow:0 7px 13px rgba(0,0,0,.36);
+}
+.card-ui.dragging{
+  opacity:.45;
+  filter:brightness(1.08);
+}
+.card-ui.selected{
+  outline:4px solid #66fcf1;
+  outline-offset:1px;
+  box-shadow:0 0 0 3px rgba(102,252,241,.2),0 8px 15px rgba(0,0,0,.36);
+}
+.card-ui .corner{font-size:18px;line-height:1.05}
+.card-ui .big{
+  font-size:34px;
+  margin-top:12px;
+  text-shadow:0 1px 0 rgba(0,0,0,.06);
+}
+.tableau-col{
+  position:relative;
+  min-height:560px;
+  border-radius:10px;
+  transition:.15s;
+}
+.tableau-card-wrap{
+  position:absolute;
+  left:0;
+  width:100%;
+}
+.foundation,.waste-card,.stock-card{position:relative}
+.foundation .card-ui,.waste-card .card-ui,.stock-card .card-ui{position:absolute;inset:0}
+.stock-card .slot,.waste-card .slot,.foundation .slot{position:absolute;inset:0}
+.foundation-label{
+  opacity:.55;
+  font-size:29px;
+}
+.drag-ghost{
+  position:fixed;
+  left:0;top:0;
+  width:96px;
+  pointer-events:none;
+  z-index:9999;
+  opacity:.92;
+  transform:rotate(3deg);
+}
+.game-tip{
+  margin-top:10px;
+  font-size:11px;
+  color:#d6eee6;
+  text-align:center;
+  opacity:.88;
+}
+.move-flash{animation:moveFlash .32s ease-out}
+@keyframes moveFlash{
+  0%{transform:scale(.95);filter:brightness(1.25)}
+  100%{transform:scale(1);filter:brightness(1)}
+}
+.card-flip{animation:cardFlip .28s ease-out}
+@keyframes cardFlip{
+  0%{transform:rotateY(90deg)}
+  100%{transform:rotateY(0)}
+}
+.invalid-shake{animation:invalidShake .22s linear}
+@keyframes invalidShake{
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-5px)}
+  75%{transform:translateX(5px)}
+}
+@media(max-width:1000px){
+  .game-shell{grid-template-columns:1fr}
+  .side-panel{min-height:auto}
+  .top-row,.board{grid-template-columns:repeat(7,minmax(72px,1fr));gap:8px}
+}
+@media(max-width:690px){
+  .top-row,.board{grid-template-columns:repeat(7,68px);min-width:520px}
+  .card-ui{min-height:96px}
+  .card-ui .big{font-size:27px}
+  .tableau-col{min-height:500px}
+}
+
 </style>
 </head>
 <body>
 <div class="container">
 <h1>🃏✨ 멀티 솔리테어 챌린지</h1>
-<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.0</span></div>
+<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.1</span></div>
 
 <div id="view-auth" class="card auth-box">
  <div id="form-login">
@@ -119,7 +239,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
     <div id="foundation-2" class="pile foundation"></div>
     <div id="foundation-3" class="pile foundation"></div>
    </div>
-   <div id="tableau" class="board"></div>
+   <div id="tableau" class="board"></div><div class="game-tip">💡 카드를 끌어서 옮기거나 클릭해서 선택할 수 있어요. 더블클릭하면 가능한 경우 자동으로 위쪽 무늬 칸에 올라갑니다.</div>
   </div>
   <div class="side-panel">
    <h3>🏆 클리어 타임 랭킹</h3>
@@ -227,65 +347,492 @@ function renderRankings(){
  if($('lobby-ranking'))$('lobby-ranking').innerHTML=html;if($('game-ranking'))$('game-ranking').innerHTML=html;
 }
 
-const SUITS=[{s:'♠',red:false},{s:'♥',red:true},{s:'♦',red:true},{s:'♣',red:false}];
+
+const SUITS=[
+ {s:'♠',red:false,name:'spade'},
+ {s:'♥',red:true,name:'heart'},
+ {s:'♦',red:true,name:'diamond'},
+ {s:'♣',red:false,name:'club'}
+];
 const RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-function makeDeck(){let d=[],id=0;for(let si=0;si<4;si++)for(let r=1;r<=13;r++)d.push({id:id++,suit:si,rank:r,faceUp:false});for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]]}return d}
-function startNewGame(){
- clearInterval(timerInterval);selected=null;const deck=makeDeck(),tableau=[[],[],[],[],[],[],[]];for(let c=0;c<7;c++)for(let r=0;r<=c;r++){const card=deck.pop();card.faceUp=r===c;tableau[c].push(card)}
- game={stock:deck,waste:[],foundations:[[],[],[],[]],tableau,finished:false};startedAt=Date.now();timerInterval=setInterval(updateTimer,500);switchView('view-game');$('finish-box').innerHTML='';renderGame();renderRankings();
+
+let dragState=null;
+let lastMoveTarget=null;
+
+function makeDeck(){
+ let d=[],id=0;
+ for(let si=0;si<4;si++)for(let r=1;r<=13;r++)d.push({id:id++,suit:si,rank:r,faceUp:false});
+ for(let i=d.length-1;i>0;i--){
+  const j=Math.floor(Math.random()*(i+1));
+  [d[i],d[j]]=[d[j],d[i]];
+ }
+ return d;
 }
-function updateTimer(){if(!game||game.finished)return;const ms=Date.now()-startedAt;$('timer').textContent=formatTime(ms)}
+
+function startNewGame(){
+ clearInterval(timerInterval);
+ selected=null;
+ dragState=null;
+ const deck=makeDeck(),tableau=[[],[],[],[],[],[],[]];
+
+ for(let c=0;c<7;c++){
+  for(let r=0;r<=c;r++){
+   const card=deck.pop();
+   card.faceUp=(r===c);
+   tableau[c].push(card);
+  }
+ }
+
+ game={
+  stock:deck,
+  waste:[],
+  foundations:[[],[],[],[]],
+  tableau,
+  finished:false,
+  moves:0
+ };
+ startedAt=Date.now();
+ timerInterval=setInterval(updateTimer,500);
+ switchView('view-game');
+ $('finish-box').innerHTML='';
+ renderGame();
+ renderRankings();
+}
+
+function updateTimer(){
+ if(!game||game.finished)return;
+ $('timer').textContent=formatTime(Date.now()-startedAt);
+}
 function backToLobby(){clearInterval(timerInterval);switchView('view-lobby');renderLobby()}
 function cardText(c){return RANKS[c.rank-1]+SUITS[c.suit].s}
-function cardHTML(c,attrs=''){if(!c.faceUp)return `<div class="card-ui back" ${attrs}></div>`;const red=SUITS[c.suit].red?'red':'';return `<div class="card-ui ${red}" ${attrs}><div>${cardText(c)}</div><div class="big">${SUITS[c.suit].s}</div></div>`}
+
+function cardHTML(c,sourceType,a,b){
+ if(!c.faceUp){
+  return `<div class="card-ui back" draggable="false"></div>`;
+ }
+ const red=SUITS[c.suit].red?'red':'';
+ const selectedClass=isSelected(sourceType,a,b)?'selected':'';
+ const dragAttrs=`draggable="true"
+  ondragstart="startCardDrag(event,'${sourceType}',${a??'null'},${b??'null'})"
+  ondragend="endCardDrag(event)"
+  ondblclick="event.stopPropagation();autoFoundation('${sourceType}',${a??'null'},${b??'null'})"`;
+
+ return `<div class="card-ui ${red} ${selectedClass}" ${dragAttrs}>
+   <div class="corner">${cardText(c)}</div>
+   <div class="big">${SUITS[c.suit].s}</div>
+ </div>`;
+}
+
+function tableauOffset(col,ri){
+ const c=col[ri];
+ if(!c.faceUp)return ri*24;
+ let offset=0;
+ for(let i=0;i<ri;i++)offset+=col[i].faceUp?31:24;
+ return offset;
+}
+
 function renderGame(){
+ if(!game)return;
  updateTimer();
- $('stock').innerHTML=game.stock.length?cardHTML({faceUp:false},`onclick="drawStock()"`):`<div class="slot" onclick="recycleStock()">↻</div>`;
- $('waste').innerHTML=game.waste.length?cardHTML(game.waste[game.waste.length-1],`onclick="selectWaste()"`):`<div class="slot"></div>`;
- for(let i=0;i<4;i++){const f=game.foundations[i],el=$('foundation-'+i);el.innerHTML=f.length?cardHTML(f[f.length-1],`onclick="selectFoundation(${i})"`):`<div class="slot" onclick="moveSelectedToFoundation(${i})">${SUITS[i].s}</div>`}
- $('tableau').innerHTML=game.tableau.map((col,ci)=>`<div class="tableau-col" onclick="tableauEmptyClick(${ci},event)">${col.map((c,ri)=>`<div style="position:absolute;top:${ri*28}px;width:100%;height:120px">${cardHTML(c,`onclick="event.stopPropagation();selectTableau(${ci},${ri})"`).replace('card-ui ',`card-ui ${isSelected('t',ci,ri)?'selected ':''}`)}</div>`).join('')}</div>`).join('');
- if(selected&&selected.type==='w'&&game.waste.length){$('waste').querySelector('.card-ui')?.classList.add('selected')}
+
+ // Stock
+ $('stock').innerHTML=game.stock.length
+  ? `<div onclick="drawStock()">${cardHTML({faceUp:false},'stock',null,null)}</div>`
+  : `<div class="slot" onclick="recycleStock()">↻</div>`;
+
+ // Waste
+ $('waste').innerHTML=game.waste.length
+  ? `<div onclick="event.stopPropagation();selectWaste()">${cardHTML(game.waste[game.waste.length-1],'w',null,null)}</div>`
+  : `<div class="slot"></div>`;
+
+ // Foundations
+ for(let i=0;i<4;i++){
+  const f=game.foundations[i],el=$('foundation-'+i);
+  el.ondragover=e=>foundationDragOver(e,i);
+  el.ondrop=e=>dropToFoundation(e,i);
+  el.ondragleave=()=>clearDropStyles();
+
+  el.innerHTML=f.length
+   ? `<div onclick="event.stopPropagation();selectFoundation(${i})">${cardHTML(f[f.length-1],'f',i,null)}</div>`
+   : `<div class="slot" onclick="moveSelectedToFoundation(${i})"><span class="foundation-label">${SUITS[i].s}</span></div>`;
+ }
+
+ // Tableau
+ $('tableau').innerHTML=game.tableau.map((col,ci)=>{
+  const cards=col.map((c,ri)=>{
+   const top=tableauOffset(col,ri);
+   if(!c.faceUp){
+    const click=(ri===col.length-1)?`onclick="event.stopPropagation();flipTableauTop(${ci})"`:'';
+    return `<div class="tableau-card-wrap" style="top:${top}px;z-index:${ri+1}" ${click}>
+      <div class="card-ui back"></div>
+    </div>`;
+   }
+
+   return `<div class="tableau-card-wrap" style="top:${top}px;z-index:${ri+1}"
+     onclick="event.stopPropagation();selectTableau(${ci},${ri})">
+      ${cardHTML(c,'t',ci,ri)}
+    </div>`;
+  }).join('');
+
+  return `<div class="tableau-col"
+    data-col="${ci}"
+    onclick="tableauEmptyClick(${ci},event)"
+    ondragover="tableauDragOver(event,${ci})"
+    ondrop="dropToTableau(event,${ci})"
+    ondragleave="tableauDragLeave(event)">
+    ${cards}
+  </div>`;
+ }).join('');
+
+ if(lastMoveTarget){
+  const el=document.querySelector(lastMoveTarget);
+  if(el){
+   el.classList.add('move-flash');
+   setTimeout(()=>el.classList.remove('move-flash'),350);
+  }
+  lastMoveTarget=null;
+ }
 }
-function isSelected(type,a,b){return selected&&selected.type===type&&selected.a===a&&selected.b===b}
-function drawStock(){if(!game.stock.length)return;const c=game.stock.pop();c.faceUp=true;game.waste.push(c);selected=null;renderGame()}
-function recycleStock(){if(game.stock.length||!game.waste.length)return;game.stock=game.waste.reverse().map(c=>({...c,faceUp:false}));game.waste=[];selected=null;renderGame()}
-function selectWaste(){if(!game.waste.length)return;selected={type:'w'};renderGame()}
-function selectFoundation(i){const f=game.foundations[i];if(!f.length)return;selected={type:'f',a:i};renderGame()}
-function selectTableau(ci,ri){
- const c=game.tableau[ci][ri];if(!c.faceUp){if(ri===game.tableau[ci].length-1){c.faceUp=true;renderGame()}return}
- if(selected){if(tryMoveSelectedToTableau(ci)){renderGame();checkWin();return}}
- selected={type:'t',a:ci,b:ri};renderGame()
+
+function isSelected(type,a,b){
+ return !!selected&&selected.type===type&&selected.a===a&&selected.b===b;
 }
-function tableauEmptyClick(ci,e){if(e.target!==e.currentTarget)return;if(selected&&tryMoveSelectedToTableau(ci)){renderGame();checkWin()}}
-function getSelectedCards(){
- if(!selected)return null;
- if(selected.type==='w'){const c=game.waste[game.waste.length-1];return c?[c]:null}
- if(selected.type==='f'){const f=game.foundations[selected.a];const c=f[f.length-1];return c?[c]:null}
- if(selected.type==='t')return game.tableau[selected.a].slice(selected.b);
- return null
+
+function getSourceCards(source){
+ if(!source)return null;
+ if(source.type==='w'){
+  const c=game.waste[game.waste.length-1];
+  return c?[c]:null;
+ }
+ if(source.type==='f'){
+  const f=game.foundations[source.a];
+  const c=f[f.length-1];
+  return c?[c]:null;
+ }
+ if(source.type==='t'){
+  const col=game.tableau[source.a];
+  if(!col||source.b<0||source.b>=col.length)return null;
+  const cards=col.slice(source.b);
+  if(!cards.length||!cards[0].faceUp)return null;
+  // sequence itself must be valid
+  for(let i=0;i<cards.length-1;i++){
+   if(!validTableau(cards[i],cards[i+1]))return null;
+  }
+  return cards;
+ }
+ return null;
 }
+
+function getSelectedCards(){return getSourceCards(selected)}
+
+function detachSource(source){
+ if(source.type==='w'){
+  return [game.waste.pop()];
+ }
+ if(source.type==='f'){
+  return [game.foundations[source.a].pop()];
+ }
+ if(source.type==='t'){
+  const cards=game.tableau[source.a].splice(source.b);
+  flipTop(source.a);
+  return cards;
+ }
+ return [];
+}
+
 function validTableau(destCard,movingCard){
+ if(!movingCard)return false;
  if(!destCard)return movingCard.rank===13;
- return destCard.faceUp&&destCard.rank===movingCard.rank+1&&SUITS[destCard.suit].red!==SUITS[movingCard.suit].red
+ return destCard.faceUp
+  && destCard.rank===movingCard.rank+1
+  && SUITS[destCard.suit].red!==SUITS[movingCard.suit].red;
 }
+
+function validFoundation(fi,card){
+ if(!card||card.suit!==fi)return false;
+ const f=game.foundations[fi];
+ if(!f.length)return card.rank===1;
+ return f[f.length-1].rank+1===card.rank;
+}
+
+function flipTop(ci){
+ const col=game.tableau[ci];
+ if(col.length&&!col[col.length-1].faceUp)col[col.length-1].faceUp=true;
+}
+function flipTableauTop(ci){
+ const col=game.tableau[ci];
+ if(!col.length)return;
+ const c=col[col.length-1];
+ if(!c.faceUp){
+  c.faceUp=true;
+  game.moves++;
+  renderGame();
+  const el=document.querySelector(`.tableau-col[data-col="${ci}"] .tableau-card-wrap:last-child .card-ui`);
+  el?.classList.add('card-flip');
+ }
+}
+
+function selectWaste(){
+ if(!game.waste.length)return;
+ if(selected?.type==='w')selected=null;
+ else selected={type:'w',a:null,b:null};
+ renderGame();
+}
+function selectFoundation(i){
+ const f=game.foundations[i];
+ if(!f.length)return;
+ if(selected?.type==='f'&&selected.a===i)selected=null;
+ else selected={type:'f',a:i,b:null};
+ renderGame();
+}
+
+function selectTableau(ci,ri){
+ const c=game.tableau[ci][ri];
+ if(!c.faceUp){
+  if(ri===game.tableau[ci].length-1)flipTableauTop(ci);
+  return;
+ }
+
+ // clicking a destination while something is selected
+ if(selected&&!isSelected('t',ci,ri)){
+  if(tryMoveSelectedToTableau(ci)){
+   lastMoveTarget=`.tableau-col[data-col="${ci}"]`;
+   renderGame();checkWin();return;
+  }
+ }
+
+ selected={type:'t',a:ci,b:ri};
+ renderGame();
+}
+
+function tableauEmptyClick(ci,e){
+ if(e.target.closest('.card-ui'))return;
+ if(selected&&tryMoveSelectedToTableau(ci)){
+  lastMoveTarget=`.tableau-col[data-col="${ci}"]`;
+  renderGame();checkWin();
+ }
+}
+
 function tryMoveSelectedToTableau(ci){
- const cards=getSelectedCards();if(!cards||!cards.length)return false;const dest=game.tableau[ci],top=dest[dest.length-1];if(!validTableau(top,cards[0]))return false;
- if(selected.type==='w')game.waste.pop();else if(selected.type==='f')game.foundations[selected.a].pop();else if(selected.type==='t'){game.tableau[selected.a]=game.tableau[selected.a].slice(0,selected.b);flipTop(selected.a)}
- dest.push(...cards);selected=null;return true
+ const cards=getSelectedCards();
+ if(!cards||!cards.length)return false;
+
+ // prevent dropping onto same source column without actual change
+ if(selected.type==='t'&&selected.a===ci)return false;
+
+ const dest=game.tableau[ci];
+ const top=dest[dest.length-1];
+ if(!validTableau(top,cards[0])){
+  shakeTarget(`.tableau-col[data-col="${ci}"]`);
+  return false;
+ }
+
+ const moved=detachSource(selected);
+ dest.push(...moved);
+ selected=null;
+ game.moves++;
+ return true;
 }
-function flipTop(ci){const col=game.tableau[ci];if(col.length&&!col[col.length-1].faceUp)col[col.length-1].faceUp=true}
+
 function moveSelectedToFoundation(fi){
- const cards=getSelectedCards();if(!cards||cards.length!==1)return;const c=cards[0],f=game.foundations[fi];if(c.suit!==fi)return;if((f.length===0&&c.rank!==1)||(f.length&&f[f.length-1].rank+1!==c.rank))return;
- if(selected.type==='w')game.waste.pop();else if(selected.type==='t'){game.tableau[selected.a].splice(selected.b,1);flipTop(selected.a)}else if(selected.type==='f')return;
- f.push(c);selected=null;renderGame();checkWin()
+ const cards=getSelectedCards();
+ if(!cards||cards.length!==1)return false;
+ const c=cards[0];
+
+ if(!validFoundation(fi,c)){
+  shakeTarget(`#foundation-${fi}`);
+  return false;
+ }
+
+ const moved=detachSource(selected)[0];
+ game.foundations[fi].push(moved);
+ selected=null;
+ game.moves++;
+ lastMoveTarget=`#foundation-${fi}`;
+ renderGame();
+ checkWin();
+ return true;
 }
-function checkWin(){if(game.foundations.every(f=>f.length===13))finishGame()}
+
+function autoFoundation(sourceType,a,b){
+ const source={type:sourceType,a,b};
+ const cards=getSourceCards(source);
+ if(!cards||cards.length!==1)return;
+ const card=cards[0];
+ const fi=card.suit;
+ if(!validFoundation(fi,card))return;
+
+ selected=source;
+ moveSelectedToFoundation(fi);
+}
+
+function drawStock(){
+ if(!game.stock.length)return;
+ const c=game.stock.pop();
+ c.faceUp=true;
+ game.waste.push(c);
+ selected=null;
+ game.moves++;
+ renderGame();
+}
+function recycleStock(){
+ if(game.stock.length||!game.waste.length)return;
+ game.stock=game.waste.reverse().map(c=>({...c,faceUp:false}));
+ game.waste=[];
+ selected=null;
+ game.moves++;
+ renderGame();
+}
+
+function shakeTarget(selector){
+ const el=document.querySelector(selector);
+ if(!el)return;
+ el.classList.remove('invalid-shake');
+ void el.offsetWidth;
+ el.classList.add('invalid-shake');
+ setTimeout(()=>el.classList.remove('invalid-shake'),260);
+}
+
+/* ---------- Drag & Drop ---------- */
+function startCardDrag(e,type,a,b){
+ const source={type,a,b};
+ const cards=getSourceCards(source);
+ if(!cards||!cards.length){
+  e.preventDefault();return;
+ }
+
+ dragState=source;
+ selected=source;
+
+ e.dataTransfer.effectAllowed='move';
+ e.dataTransfer.setData('text/plain',JSON.stringify(source));
+
+ const card=e.currentTarget;
+ card.classList.add('dragging');
+
+ // small custom ghost
+ const ghost=card.cloneNode(true);
+ ghost.classList.remove('selected','dragging');
+ ghost.classList.add('drag-ghost');
+ document.body.appendChild(ghost);
+ e.dataTransfer.setDragImage(ghost,45,30);
+ setTimeout(()=>ghost.remove(),0);
+}
+
+function endCardDrag(e){
+ e.currentTarget?.classList.remove('dragging');
+ dragState=null;
+ clearDropStyles();
+}
+
+function sourceFromDrag(e){
+ if(dragState)return dragState;
+ try{return JSON.parse(e.dataTransfer.getData('text/plain'))}catch{return null}
+}
+
+function tableauDragOver(e,ci){
+ const source=sourceFromDrag(e);
+ const cards=getSourceCards(source);
+ if(!cards||!cards.length)return;
+ const dest=game.tableau[ci],top=dest[dest.length-1];
+ if(source?.type==='t'&&source.a===ci)return;
+
+ e.preventDefault();
+ e.dataTransfer.dropEffect='move';
+ clearDropStyles();
+
+ const el=document.querySelector(`.tableau-col[data-col="${ci}"]`);
+ el?.classList.add(validTableau(top,cards[0])?'drop-ok':'drop-bad');
+}
+
+function tableauDragLeave(e){
+ if(e.currentTarget.contains(e.relatedTarget))return;
+ e.currentTarget.classList.remove('drop-ok','drop-bad');
+}
+
+function dropToTableau(e,ci){
+ e.preventDefault();
+ const source=sourceFromDrag(e);
+ clearDropStyles();
+ if(!source)return;
+
+ selected=source;
+ if(tryMoveSelectedToTableau(ci)){
+  lastMoveTarget=`.tableau-col[data-col="${ci}"]`;
+  renderGame();
+  checkWin();
+ }else{
+  selected=null;
+  renderGame();
+ }
+ dragState=null;
+}
+
+function foundationDragOver(e,fi){
+ const source=sourceFromDrag(e);
+ const cards=getSourceCards(source);
+ if(!cards||cards.length!==1)return;
+
+ e.preventDefault();
+ e.dataTransfer.dropEffect='move';
+ clearDropStyles();
+
+ const el=$('foundation-'+fi);
+ el?.classList.add(validFoundation(fi,cards[0])?'drop-ok':'drop-bad');
+}
+
+function dropToFoundation(e,fi){
+ e.preventDefault();
+ const source=sourceFromDrag(e);
+ clearDropStyles();
+ if(!source)return;
+
+ selected=source;
+ if(!moveSelectedToFoundation(fi)){
+  selected=null;
+  renderGame();
+ }
+ dragState=null;
+}
+
+function clearDropStyles(){
+ document.querySelectorAll('.drop-ok,.drop-bad').forEach(el=>el.classList.remove('drop-ok','drop-bad'));
+}
+
+/* ---------- Touch / Pointer fallback ---------- */
+/* 모바일에서는 클릭 선택 방식이 그대로 동작하고,
+   데스크톱에서는 native drag-and-drop을 사용한다. */
+
+function checkWin(){
+ if(game.foundations.every(f=>f.length===13))finishGame();
+}
+
 async function finishGame(){
- if(game.finished)return;game.finished=true;clearInterval(timerInterval);const ms=Date.now()-startedAt;$('timer').textContent=formatTime(ms);
+ if(game.finished)return;
+ game.finished=true;
+ clearInterval(timerInterval);
+ const ms=Date.now()-startedAt;
+ $('timer').textContent=formatTime(ms);
  $('finish-box').innerHTML=`<div class="finish-banner">🎉 클리어! 기록 ${formatTime(ms)}<br>랭킹에 저장 중...</div>`;
- await fetchSystemData();const old=globalData.rankings?.[currentUser.id];if(!old||ms<old.bestMs){await save(`${RANK_PATH}/${currentUser.id}`,{userId:currentUser.id,bestMs:ms,updatedAt:Date.now()});$('finish-box').innerHTML=`<div class="finish-banner">🏆 신기록! ${formatTime(ms)}<br>개인 최고 기록으로 저장됐어요.</div>`}else{$('finish-box').innerHTML=`<div class="finish-banner">🎉 클리어! ${formatTime(ms)}<br>개인 최고 ${formatTime(old.bestMs)}</div>`}
- await fetchSystemData();renderRankings()
+
+ await fetchSystemData();
+ const old=globalData.rankings?.[currentUser.id];
+
+ if(!old||ms<old.bestMs){
+  await save(`${RANK_PATH}/${currentUser.id}`,{
+   userId:currentUser.id,
+   bestMs:ms,
+   updatedAt:Date.now()
+  });
+  $('finish-box').innerHTML=`<div class="finish-banner">🏆 신기록! ${formatTime(ms)}<br>개인 최고 기록으로 저장됐어요.</div>`;
+ }else{
+  $('finish-box').innerHTML=`<div class="finish-banner">🎉 클리어! ${formatTime(ms)}<br>개인 최고 ${formatTime(old.bestMs)}</div>`;
+ }
+
+ await fetchSystemData();
+ renderRankings();
 }
+
 </script>
 </body>
 </html>
