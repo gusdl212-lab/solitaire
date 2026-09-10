@@ -489,7 +489,7 @@ button:hover{
   }
 }
 
-/* ===== Solitaire v1.7 : 드래그앤드롭 / 카드 모션 / UI ===== */
+/* ===== Solitaire v1.9 : 드래그앤드롭 / 카드 모션 / UI ===== */
 
 .container{
   max-width:1280px
@@ -862,7 +862,7 @@ body.game-paused #timer{
   }
 }
 
-/* ===== Solitaire v1.7 : 반복 상태 실패 안내 ===== */
+/* ===== Solitaire v1.9 : 반복 상태 실패 안내 ===== */
 
 .repeat-fail-banner{
   background:rgba(226,85,85,.14);
@@ -985,7 +985,7 @@ body.game-paused #timer{
 
 <div class="status-bar">
   <span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span>
-  <span style="color:#66fcf1;font-weight:900">Solitaire v1.7</span>
+  <span style="color:#66fcf1;font-weight:900">Solitaire v1.9</span>
 </div>
 
 <!-- ================= 로그인 ================= -->
@@ -1503,7 +1503,7 @@ let undoStack=[];
 
 
 /* =========================================================
-   Solitaire v1.7
+   Solitaire v1.9
    반복 게임 상태 기록
    ========================================================= */
 
@@ -2681,7 +2681,7 @@ function startNewGame(){
   dragState=null;
 
 
-  /* v1.7 반복 상태 기록 초기화 */
+  /* v1.9 반복 상태 기록 초기화 */
   seenGameStates=new Map();
 
   lastStateKey='';
@@ -3840,13 +3840,20 @@ function undoMove(){
   $('finish-box').innerHTML='';
 
 
+  /*
+   * Undo는 사용자가 의도적으로 게임 트리를 되돌린 것이므로
+   * 이전 분기의 반복 상태 기록을 모두 버리고
+   * 복원된 상태부터 새로 기록한다.
+   */
+  resetSeenGameStates();
+
+
   renderGame();
 
 
   /*
-   * Undo 자체는 반복 상태 판정 대상에서 제외한다.
-   * 사용자가 의도적으로 되돌리기한 순간에는 실패 처리하지 않고,
-   * 그 이후 실제 게임 이동이 같은 상태로 돌아오면 감지한다.
+   * Undo 직후에는 반복 상태 실패를 발생시키지 않는다.
+   * 복원된 상태 이후의 실제 이동부터 다시 감지한다.
    */
   toastRule(
     '이전 상태로 되돌렸어요.'
@@ -3856,7 +3863,7 @@ function undoMove(){
 
 
 /* =========================================================
-   Solitaire v1.7
+   Solitaire v1.9
    게임 상태를 고유 문자열로 변환
    ========================================================= */
 
@@ -3941,7 +3948,7 @@ function getGameStateKey(){
 
 
 /* =========================================================
-   Solitaire v1.7
+   Solitaire v1.9
    새로운 게임 상태 기록 초기화
    ========================================================= */
 
@@ -3976,7 +3983,7 @@ function resetSeenGameStates(){
 
 
 /* =========================================================
-   Solitaire v1.7
+   Solitaire v1.9
    반복 상태 감지
    ========================================================= */
 
@@ -3989,6 +3996,20 @@ function checkRepeatedGameState(){
 
     return false;
 
+  }
+
+
+  /*
+   * Stock 또는 Waste에서 아직 새로운 카드를 노출할 수 있는 동안에는
+   * 단순한 상태 반복만으로 실패시키지 않는다.
+   * 실제 교착 판정은 hasAnyLegalMove()가 담당한다.
+   */
+  if(
+    game.stock.length>0 ||
+    (game.waste.length>0 && hasAnyWasteCardProgress())
+  ){
+
+    return false;
   }
 
 
@@ -4044,54 +4065,121 @@ function checkRepeatedGameState(){
 
 
 /* =========================================================
-   가능한 수 검사
+   실제 진행 가능 수 검사
+   Solitaire v1.9
+
+   중요:
+   Stock에 카드가 남아 있다는 사실만으로
+   무조건 진행 가능하다고 판단하지 않는다.
+
+   현재 Tableau/Foundation 상태를 기준으로
+   Stock/Waste의 카드들을 실제로 노출했을 때
+   이동 가능한 카드가 하나라도 있는지 검사한다.
    ========================================================= */
 
-function hasAnyLegalMove(){
+function hasStockActionAvailable(){
 
   if(
     !game ||
     game.finished
   ){
+    return false;
+  }
 
+  /*
+   * Stock이 남아 있다는 것은 카드를 뽑는 행동 자체는 가능하다.
+   * 하지만 v1.9의 교착 판정에서는
+   * 단순한 draw 자체가 아니라
+   * 그 뒤 실제로 카드를 놓을 수 있는지도 함께 검사한다.
+   */
+  return game.stock.length>0;
+}
+
+
+function canPlaceFoundationInCurrentState(card){
+
+  if(!card)
     return false;
 
+  const f=
+    game.foundations[card.suit];
+
+  if(!f.length){
+    return card.rank===1;
   }
 
+  return
+    f[f.length-1].rank+1===card.rank;
+}
 
-  /*
-   * 덱에서 아직 뽑을 카드가 있으면
-   * 진행 가능.
-   */
-  if(
-    game.stock.length>0
+
+function canPlaceOnAnyTableau(card){
+
+  if(!card || !card.faceUp)
+    return false;
+
+  for(
+    let di=0;
+    di<7;
+    di++
   ){
 
-    return true;
+    const dest=
+      game.tableau[di];
 
+    if(
+      validTableau(
+        dest[dest.length-1],
+        card
+      )
+    ){
+      return true;
+    }
   }
 
+  return false;
+}
 
-  /*
-   * 덱이 비었고 waste가 남아 있으면
-   * 다시 돌릴 수 있다.
-   *
-   * v1.7에서는 이 행동을 무한히 반복하면
-   * 상태 반복 감지가 잡는다.
-   */
+
+function canWasteCardProgress(card){
+
+  if(!card)
+    return false;
+
   if(
-    game.waste.length>0
+    canPlaceFoundationInCurrentState(card)
   ){
-
     return true;
-
   }
 
+  if(
+    canPlaceOnAnyTableau(card)
+  ){
+    return true;
+  }
 
-  /*
-   * 뒤집히지 않은 카드가
-   * 각 줄의 맨 위에 있으면 뒤집을 수 있다.
-   */
+  return false;
+}
+
+
+/*
+ * 현재 Tableau에서 실제로 가능한 수가 있는지 검사한다.
+ *
+ * 포함하는 행동:
+ * 1. 뒤집힌 카드 뒤집기
+ * 2. Tableau -> Foundation
+ * 3. Tableau -> Tableau
+ */
+function hasAnyTableauOrFoundationMove(){
+
+  if(
+    !game ||
+    game.finished
+  ){
+    return false;
+  }
+
+  /* 뒤집을 수 있는 카드 */
   for(
     const col of game.tableau
   ){
@@ -4100,42 +4188,11 @@ function hasAnyLegalMove(){
       col.length &&
       !col[col.length-1].faceUp
     ){
-
       return true;
-
     }
-
   }
 
-
-  /*
-   * 폐기 더미 -> foundation
-   */
-  if(game.waste.length){
-
-    const c=
-      game.waste[
-        game.waste.length-1
-      ];
-
-
-    if(
-      validFoundation(
-        c.suit,
-        c
-      )
-    ){
-
-      return true;
-
-    }
-
-  }
-
-
-  /*
-   * tableau -> foundation
-   */
+  /* Tableau -> Foundation */
   for(
     const col of game.tableau
   ){
@@ -4143,31 +4200,18 @@ function hasAnyLegalMove(){
     if(!col.length)
       continue;
 
-
     const c=
       col[col.length-1];
 
-
     if(
       c.faceUp &&
-      validFoundation(
-        c.suit,
-        c
-      )
+      canPlaceFoundationInCurrentState(c)
     ){
-
       return true;
-
     }
-
   }
 
-
-  /*
-   * tableau -> tableau
-   *
-   * 모든 가능한 시작점을 검사한다.
-   */
+  /* Tableau -> Tableau */
   for(
     let si=0;
     si<7;
@@ -4176,7 +4220,6 @@ function hasAnyLegalMove(){
 
     const col=
       game.tableau[si];
-
 
     for(
       let ri=0;
@@ -4187,25 +4230,17 @@ function hasAnyLegalMove(){
       const c=
         col[ri];
 
-
       if(!c.faceUp)
         continue;
-
 
       const moving=
         col.slice(ri);
 
-
       if(
-        !isValidSequence(
-          moving
-        )
+        !isValidSequence(moving)
       ){
-
         continue;
-
       }
-
 
       for(
         let di=0;
@@ -4216,10 +4251,8 @@ function hasAnyLegalMove(){
         if(si===di)
           continue;
 
-
         const dest=
           game.tableau[di];
-
 
         if(
           validTableau(
@@ -4227,25 +4260,167 @@ function hasAnyLegalMove(){
             moving[0]
           )
         ){
-
           return true;
-
         }
-
       }
-
     }
-
   }
 
+  return false;
+}
+
+
+/*
+ * 현재 Waste의 모든 카드를 가상으로 한 장씩
+ * 맨 위에 올려 놓았다고 보고 검사한다.
+ *
+ * Stock이 비어 있을 때 recycle을 하면
+ * Waste의 각 카드가 결국 차례대로 노출될 수 있으므로
+ * 맨 위 카드 하나만 보는 것보다 정확하다.
+ */
+function hasAnyWasteCardProgress(){
+
+  if(
+    !game ||
+    !game.waste.length
+  ){
+    return false;
+  }
+
+  for(
+    const card of game.waste
+  ){
+
+    const testCard={
+      ...card,
+      faceUp:true
+    };
+
+    if(
+      canWasteCardProgress(testCard)
+    ){
+      return true;
+    }
+  }
 
   return false;
+}
 
+
+/*
+ * Stock의 카드들을 실제 draw 순서대로 가상 노출한다.
+ *
+ * drawStock()은 stock.pop()이므로
+ * 배열의 뒤쪽 카드부터 검사한다.
+ * 각 카드는 현재 Tableau/Foundation에 놓을 수 있는지 확인한다.
+ *
+ * 중요한 점:
+ * - 단순히 stock.length > 0이면 true가 아니다.
+ * - Stock의 모든 카드가 현재 상태에서 어디에도 놓일 수 없다면
+ *   Stock을 전부 소모해도 실질적인 진행이 없다.
+ */
+function hasAnyStockCardProgress(){
+
+  if(
+    !game ||
+    !game.stock.length
+  ){
+    return false;
+  }
+
+  for(
+    let i=game.stock.length-1;
+    i>=0;
+    i--
+  ){
+
+    const card={
+      ...game.stock[i],
+      faceUp:true
+    };
+
+    if(
+      canWasteCardProgress(card)
+    ){
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
+/*
+ * 현재 게임에서 실제로 의미 있는 진행 수가 있는지 검사한다.
+ *
+ * Stock이 있으면:
+ *   - 현재 Waste의 카드 이동 가능성
+ *   - Stock의 모든 카드를 가상 draw하여 이동 가능성
+ *   - Tableau/Foundation 이동
+ *
+ * Stock이 없고 Waste가 있으면:
+ *   - 현재 Waste 및 recycle 후 노출될 카드 이동 가능성
+ *   - Tableau/Foundation 이동
+ *
+ * Stock과 Waste가 모두 없으면:
+ *   - Tableau/Foundation 이동만 검사
+ */
+function hasAnyLegalMove(){
+
+  if(
+    !game ||
+    game.finished
+  ){
+    return false;
+  }
+
+  /* Tableau 쪽에서 움직일 수 있으면 진행 가능 */
+  if(
+    hasAnyTableauOrFoundationMove()
+  ){
+    return true;
+  }
+
+  /* 현재 Waste 카드가 이동 가능 */
+  if(
+    game.waste.length &&
+    canWasteCardProgress(
+      game.waste[game.waste.length-1]
+    )
+  ){
+    return true;
+  }
+
+  /*
+   * Stock에 있는 카드 중 하나라도
+   * 노출되었을 때 실제로 이동할 수 있으면 진행 가능.
+   */
+  if(
+    hasAnyStockCardProgress()
+  ){
+    return true;
+  }
+
+  /*
+   * Stock이 비어 있으면 Waste를 recycle할 수 있다.
+   * recycle 후 각 Waste 카드가 차례로 노출될 수 있으므로
+   * 전체 Waste를 검사한다.
+   */
+  if(
+    !game.stock.length &&
+    game.waste.length &&
+    hasAnyWasteCardProgress()
+  ){
+    return true;
+  }
+
+  return false;
 }
 
 
 /* =========================================================
    교착 검사
+   Solitaire v1.9
    ========================================================= */
 
 function checkStuck(){
@@ -4255,46 +4430,45 @@ function checkStuck(){
     game.finished ||
     autoFinishing
   ){
-
     return false;
-
   }
 
-
   /*
-   * 1단계:
-   * 규칙상 가능한 수가 하나라도 있는지 검사
+   * 실제로 새로운 진행 수가 있는지 확인한다.
+   *
+   * v1.8의 문제:
+   *   stock.length > 0이면 무조건 진행 가능으로 판단했다.
+   *
+   * v1.9에서는 Stock의 카드들을 가상으로 노출하여
+   * 실제 이동 가능한 카드가 있는지까지 검사한다.
    */
   if(
     !hasAnyLegalMove()
   ){
 
     finishFailure(
-      '더 이상 진행할 수 있는 수가 없습니다.',
-      `게임 종료 · 총 ${game.moves}수`
+      '더 이상 실제로 진행할 수 있는 수가 없습니다.',
+      `Stock/Waste를 포함한 가능한 이동 없음 · 총 ${game.moves}수`
     );
 
     return true;
-
   }
 
-
   /*
-   * 2단계:
-   * 가능한 수가 있더라도
-   * 과거의 동일한 게임 상태로 돌아왔는지 검사
+   * 실제 진행 수가 있더라도
+   * Stock/Waste를 포함한 전체 게임 상태가
+   * 이전 상태와 정확히 같아졌다면 순환으로 판단한다.
+   *
+   * 단, checkRepeatedGameState() 내부에서도
+   * 동일한 방어 조건을 두어 안전하게 처리한다.
    */
   if(
     checkRepeatedGameState()
   ){
-
     return true;
-
   }
 
-
   return false;
-
 }
 
 
