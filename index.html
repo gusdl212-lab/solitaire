@@ -55,7 +55,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 @media(max-width:980px){.lobby-grid,.game-shell{grid-template-columns:1fr}.panel{height:auto;max-height:430px}.side-panel{min-height:auto}.board,.top-row{grid-template-columns:repeat(7,minmax(64px,1fr));gap:7px}.solitaire-wrap{overflow-x:auto}}
 @media(max-width:650px){body{padding:5px}.container{padding:9px}.board,.top-row{grid-template-columns:repeat(7,62px);min-width:476px}.card-ui{font-size:14px}.card-ui .big{font-size:22px}.solitaire-wrap{padding:9px}}
 
-/* ===== Solitaire v1.4 : 드래그앤드롭 / 카드 모션 / 깔끔한 UI ===== */
+/* ===== Solitaire v1.5 : 드래그앤드롭 / 카드 모션 / 깔끔한 UI ===== */
 .container{max-width:1280px}
 .solitaire-wrap{
   min-height:740px;
@@ -175,7 +175,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 }
 
 
-/* ===== Solitaire v1.4 : 규칙 안내 + 합법 이동 힌트 + 조작 안정화 ===== */
+/* ===== Solitaire v1.5 : 규칙 안내 + 합법 이동 힌트 + 조작 안정화 ===== */
 .legal-target{
   outline:3px solid #ffd166!important;
   outline-offset:3px;
@@ -219,7 +219,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 }
 .help b.rule-head{color:#66fcf1}
 
-/* ===== Solitaire v1.4 : 마지막 자동 완성 ===== */
+/* ===== Solitaire v1.5 : 마지막 자동 완성 ===== */
 .auto-finish-flash{
   animation:autoFinishFlash .34s ease-out;
 }
@@ -229,12 +229,33 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
 }
 #auto-finish-btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
 
+
+/* ===== Solitaire v1.5 : 일시정지 ===== */
+.pause-overlay{
+  position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;
+  background:rgba(3,7,10,.72);backdrop-filter:blur(5px);
+}
+.pause-overlay.hidden{display:none!important}
+.pause-box{
+  min-width:280px;max-width:90vw;padding:28px 30px;text-align:center;border-radius:18px;
+  background:linear-gradient(180deg,#17222d,#0f151d);border:2px solid #66fcf1;
+  box-shadow:0 18px 60px rgba(0,0,0,.55),0 0 30px rgba(102,252,241,.12);
+}
+.pause-icon{font-size:42px;line-height:1;margin-bottom:10px}
+.pause-title{font-size:22px;font-weight:1000;color:#66fcf1;margin-bottom:8px}
+.pause-desc{font-size:12px;color:#cbd5e1;line-height:1.6;margin-bottom:18px}
+.pause-btn{background:#66fcf1;color:#0b0c10;padding:11px 22px}
+.pause-btn:hover{filter:brightness(1.08)}
+.btn-pause{background:#718096;color:#fff}
+body.game-paused .solitaire-wrap{filter:brightness(.72)}
+body.game-paused #timer{color:#ffd166}
+
 </style>
 </head>
 <body>
 <div class="container">
 <h1>🃏✨ 멀티 솔리테어 챌린지</h1>
-<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.4</span></div>
+<div class="status-bar"><span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span><span style="color:#66fcf1;font-weight:900">Solitaire v1.5</span></div>
 
 <div id="view-auth" class="card auth-box">
  <div id="form-login">
@@ -282,7 +303,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.08)}
  <div class="game-shell">
   <div class="solitaire-wrap">
    <div class="game-top">
-    <div><button class="btn-main" onclick="startNewGame()">🔄 새 게임</button> <button class="btn-gold" onclick="hintMove()">💡 가능한 수</button> <button id="auto-finish-btn" class="btn-purple" onclick="autoFinish()">✨ 자동 완성</button> <button class="btn-danger" onclick="backToLobby()">← 로비</button></div>
+    <div><button class="btn-main" onclick="startNewGame()">🔄 새 게임</button> <button class="btn-gold" onclick="hintMove()">💡 가능한 수</button> <button id="auto-finish-btn" class="btn-purple" onclick="autoFinish()">✨ 자동 완성</button> <button id="pause-btn" class="btn-pause" onclick="togglePause()">⏸ 일시정지</button> <button class="btn-danger" onclick="backToLobby()">← 로비</button></div>
     <div class="timer-box">⏱️ <span id="timer">00:00</span></div>
    </div>
    <div class="top-row">
@@ -321,6 +342,7 @@ const ONE_HOUR_MS=3600000;
 const RANK_PATH="solitaireRankings";
 let currentUser=null,globalData={users:{},lobbyChat:[],rankings:{}},syncInterval=null,heartbeatInterval=null;
 let game=null,timerInterval=null,startedAt=0,selected=null,autoFinishing=false;
+let paused=false,pauseStartedAt=0,totalPausedMs=0;
 
 function $(id){return document.getElementById(id)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
@@ -329,6 +351,13 @@ async function remove(path){try{await fetch(`${FIREBASE_BASE_URL}/${path}.json`,
 function switchView(id){['view-auth','view-lobby','view-game'].forEach(v=>$(v).classList.add('hidden'));$(id).classList.remove('hidden')}
 function switchAuthMode(m){['form-login','form-signup','form-forgot'].forEach(x=>$(x).classList.add('hidden'));$('form-'+m).classList.remove('hidden')}
 function displayName(id){return id===ADMIN_ID?'관리자':id}
+
+window.addEventListener('keydown',e=>{
+ if(e.key==='Escape' && currentUser && game && !game.finished){
+  e.preventDefault();
+  togglePause();
+ }
+});
 
 window.addEventListener('DOMContentLoaded',async()=>{
  const saved=localStorage.getItem('omok_remembered_id');if(saved){$('login-id').value=saved;$('chk-remember').checked=true}
@@ -455,11 +484,43 @@ function startNewGame(){
  renderRankings();
 }
 
+function getPlayTimeMs(){
+ if(!startedAt)return 0;
+ const now=Date.now();
+ const activePause=paused&&pauseStartedAt ? now-pauseStartedAt : 0;
+ return Math.max(0,now-startedAt-totalPausedMs-activePause);
+}
 function updateTimer(){
  if(!game||game.finished)return;
- $('timer').textContent=formatTime(Date.now()-startedAt);
+ $('timer').textContent=formatTime(getPlayTimeMs());
 }
-function backToLobby(){clearInterval(timerInterval);switchView('view-lobby');renderLobby()}
+function togglePause(){
+ if(!game||game.finished)return;
+ if(autoFinishing){toastRule('자동 완성이 진행 중일 때는 일시정지할 수 없어요.');return;}
+ if(paused){
+  totalPausedMs+=Date.now()-pauseStartedAt;
+  pauseStartedAt=0;
+  paused=false;
+  document.body.classList.remove('game-paused');
+  const overlay=$('pause-overlay'); if(overlay)overlay.classList.add('hidden');
+  const btn=$('pause-btn'); if(btn)btn.textContent='⏸ 일시정지';
+  updateTimer();
+ }else{
+  paused=true;
+  pauseStartedAt=Date.now();
+  document.body.classList.add('game-paused');
+  const overlay=$('pause-overlay'); if(overlay)overlay.classList.remove('hidden');
+  const btn=$('pause-btn'); if(btn)btn.textContent='▶ 계속하기';
+  updateTimer();
+ }
+}
+function backToLobby(){
+ clearInterval(timerInterval);
+ paused=false; pauseStartedAt=0; totalPausedMs=0;
+ document.body.classList.remove('game-paused');
+ $('pause-overlay')?.classList.add('hidden');
+ switchView('view-lobby');renderLobby();
+}
 function cardText(c){return RANKS[c.rank-1]+SUITS[c.suit].s}
 
 function cardHTML(c,sourceType,a,b){
@@ -656,6 +717,7 @@ function flipTop(ci){
  if(col.length&&!col[col.length-1].faceUp)col[col.length-1].faceUp=true;
 }
 function flipTableauTop(ci){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  const col=game.tableau[ci];
  if(!col.length)return;
  const c=col[col.length-1];
@@ -669,6 +731,7 @@ function flipTableauTop(ci){
 }
 
 function selectWaste(){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  if(!game.waste.length)return;
  if(selected?.type==='w'){selected=null;clearLegalTargets();renderGame();return}
  selected={type:'w',a:null,b:null};
@@ -676,6 +739,7 @@ function selectWaste(){
  setTimeout(()=>showLegalTargets(selected),0);
 }
 function foundationClick(i){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  if(selected){
   if(moveSelectedToFoundation(i))return;
  }
@@ -683,6 +747,7 @@ function foundationClick(i){
 }
 
 function selectFoundation(i){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  const f=game.foundations[i];
  if(!f.length)return;
  if(selected?.type==='f'&&selected.a===i){selected=null;clearLegalTargets();renderGame();return}
@@ -692,6 +757,7 @@ function selectFoundation(i){
 }
 
 function selectTableau(ci,ri){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  const col=game.tableau[ci],c=col[ri];
  if(!c.faceUp){
   if(ri===col.length-1)flipTableauTop(ci);
@@ -722,6 +788,7 @@ function selectTableau(ci,ri){
 }
 
 function tableauEmptyClick(ci,e){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  if(e.target.closest('.card-ui'))return;
  if(selected&&tryMoveSelectedToTableau(ci)){
   lastMoveTarget=`.tableau-col[data-col="${ci}"]`;
@@ -730,6 +797,7 @@ function tableauEmptyClick(ci,e){
 }
 
 function tryMoveSelectedToTableau(ci){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  const cards=getSelectedCards();
  if(!cards||!cards.length)return false;
 
@@ -754,6 +822,7 @@ function tryMoveSelectedToTableau(ci){
 }
 
 function moveSelectedToFoundation(fi){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  const cards=getSelectedCards();
  if(!cards||cards.length!==1)return false;
  const c=cards[0];
@@ -777,6 +846,7 @@ function moveSelectedToFoundation(fi){
 }
 
 function autoFoundation(sourceType,a,b){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  const source={type:sourceType,a,b};
  const cards=getSourceCards(source);
  if(!cards||cards.length!==1)return;
@@ -789,6 +859,7 @@ function autoFoundation(sourceType,a,b){
 }
 
 function drawStock(){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  if(!game.stock.length)return;
  const c=game.stock.pop();
  c.faceUp=true;
@@ -798,6 +869,7 @@ function drawStock(){
  renderGame();
 }
 function recycleStock(){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  if(game.stock.length||!game.waste.length)return;
  game.stock=game.waste.reverse().map(c=>({...c,faceUp:false}));
  game.waste=[];
@@ -817,6 +889,7 @@ function shakeTarget(selector){
 
 /* ---------- Drag & Drop ---------- */
 function startCardDrag(e,type,a,b){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  const source={type,a,b};
  const cards=getSourceCards(source);
  if(!cards||!cards.length){
@@ -876,6 +949,7 @@ function tableauDragLeave(e){
 }
 
 function dropToTableau(e,ci){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  e.preventDefault();
  const source=sourceFromDrag(e);
  clearDropStyles();
@@ -907,6 +981,7 @@ function foundationDragOver(e,fi){
 }
 
 function dropToFoundation(e,fi){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  e.preventDefault();
  const source=sourceFromDrag(e);
  clearDropStyles();
@@ -930,6 +1005,7 @@ function clearDropStyles(){
 
 
 function hintMove(){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  if(!game)return;
 
  // waste -> foundation/tableau
@@ -998,6 +1074,7 @@ function canStartAutoFinish(){
 }
 
 async function autoFinish(){
+ if(paused){toastRule('게임이 일시정지되어 있어요. 다시 시작한 뒤 이용해주세요.');return;}
  if(!game||game.finished)return;
 
  if(!canStartAutoFinish()){
@@ -1084,7 +1161,7 @@ async function finishGame(){
  if(game.finished)return;
  game.finished=true;
  clearInterval(timerInterval);
- const ms=Date.now()-startedAt;
+ const ms=getPlayTimeMs();
  $('timer').textContent=formatTime(ms);
  $('finish-box').innerHTML=`<div class="finish-banner">🎉 클리어! 기록 ${formatTime(ms)}<br>랭킹에 저장 중...</div>`;
 
@@ -1107,5 +1184,14 @@ async function finishGame(){
 }
 
 </script>
+
+<div id="pause-overlay" class="pause-overlay hidden" aria-hidden="true">
+  <div class="pause-box">
+    <div class="pause-icon">⏸️</div>
+    <div class="pause-title">게임 일시정지</div>
+    <div class="pause-desc">시간 기록이 멈췄어요.<br>누군가 말을 걸어도 기록에는 영향을 주지 않습니다.<br><b>Esc</b>를 누르거나 아래 버튼을 눌러 계속하세요.</div>
+    <button class="pause-btn" onclick="togglePause()">▶ 계속하기</button>
+  </div>
+</div>
 </body>
 </html>
