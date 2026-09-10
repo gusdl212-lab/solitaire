@@ -489,7 +489,7 @@ button:hover{
   }
 }
 
-/* ===== Solitaire v1.9 : 드래그앤드롭 / 카드 모션 / UI ===== */
+/* ===== Solitaire v2.0 : 드래그앤드롭 / 카드 모션 / UI ===== */
 
 .container{
   max-width:1280px
@@ -862,7 +862,7 @@ body.game-paused #timer{
   }
 }
 
-/* ===== Solitaire v1.9 : 반복 상태 실패 안내 ===== */
+/* ===== Solitaire v2.0 : 반복 상태 실패 안내 ===== */
 
 .repeat-fail-banner{
   background:rgba(226,85,85,.14);
@@ -985,7 +985,7 @@ body.game-paused #timer{
 
 <div class="status-bar">
   <span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span>
-  <span style="color:#66fcf1;font-weight:900">Solitaire v1.9</span>
+  <span style="color:#66fcf1;font-weight:900">Solitaire v2.0</span>
 </div>
 
 <!-- ================= 로그인 ================= -->
@@ -1503,7 +1503,7 @@ let undoStack=[];
 
 
 /* =========================================================
-   Solitaire v1.9
+   Solitaire v2.0
    반복 게임 상태 기록
    ========================================================= */
 
@@ -2681,7 +2681,7 @@ function startNewGame(){
   dragState=null;
 
 
-  /* v1.9 반복 상태 기록 초기화 */
+  /* v2.0 반복 상태 기록 초기화 */
   seenGameStates=new Map();
 
   lastStateKey='';
@@ -3863,7 +3863,7 @@ function undoMove(){
 
 
 /* =========================================================
-   Solitaire v1.9
+   Solitaire v2.0
    게임 상태를 고유 문자열로 변환
    ========================================================= */
 
@@ -3948,7 +3948,7 @@ function getGameStateKey(){
 
 
 /* =========================================================
-   Solitaire v1.9
+   Solitaire v2.0
    새로운 게임 상태 기록 초기화
    ========================================================= */
 
@@ -3983,491 +3983,35 @@ function resetSeenGameStates(){
 
 
 /* =========================================================
-   Solitaire v1.9
+   Solitaire v2.0
    반복 상태 감지
    ========================================================= */
 
 function checkRepeatedGameState(){
-
-  if(
-    !game ||
-    game.finished
-  ){
-
-    return false;
-
-  }
-
-
   /*
-   * Stock 또는 Waste에서 아직 새로운 카드를 노출할 수 있는 동안에는
-   * 단순한 상태 반복만으로 실패시키지 않는다.
-   * 실제 교착 판정은 hasAnyLegalMove()가 담당한다.
-   */
-  if(
-    game.stock.length>0 ||
-    (game.waste.length>0 && hasAnyWasteCardProgress())
-  ){
-
-    return false;
-  }
-
-
-  const key=
-    getGameStateKey();
-
-
-  /*
-   * 같은 상태가 과거에 한 번이라도 등장했다면
-   * 현재 게임이 동일한 상태로 돌아온 것이다.
+   * v2.0에서는 자동 실패 판정을 하지 않습니다.
    *
-   * 따라서 K → 빈줄 → 원위치,
-   * 654 → 7 → 원위치 등의 반복을 잡을 수 있다.
+   * 같은 상태로 돌아오는 것은 Undo/Recycle/Stock 진행 과정에서
+   * 정상적으로 발생할 수 있고, 클라이언트가 현재 상태만으로
+   * "앞으로 절대 풀 수 없다"고 정확하게 판정하기는 어렵습니다.
+   * 따라서 반복 상태는 기록하지도, 실패로 처리하지도 않습니다.
    */
-  if(
-    seenGameStates.has(key)
-  ){
-
-    const previous=
-      seenGameStates.get(key);
-
-
-    finishFailure(
-      '같은 게임 상태가 반복되어 더 이상 새로운 진행이 불가능합니다.',
-      `반복된 상태 · 이전 ${previous.move}수 → 현재 ${game.moves}수`
-    );
-
-
-    return true;
-
-  }
-
-
-  /*
-   * 처음 보는 상태라면 기록한다.
-   */
-  seenGameStates.set(
-    key,
-    {
-      move:game.moves,
-      time:Date.now()
-    }
-  );
-
-
-  lastStateKey=
-    key;
-
-
-  return false;
-
-}
-
-
-/* =========================================================
-   실제 진행 가능 수 검사
-   Solitaire v1.9
-
-   중요:
-   Stock에 카드가 남아 있다는 사실만으로
-   무조건 진행 가능하다고 판단하지 않는다.
-
-   현재 Tableau/Foundation 상태를 기준으로
-   Stock/Waste의 카드들을 실제로 노출했을 때
-   이동 가능한 카드가 하나라도 있는지 검사한다.
-   ========================================================= */
-
-function hasStockActionAvailable(){
-
-  if(
-    !game ||
-    game.finished
-  ){
-    return false;
-  }
-
-  /*
-   * Stock이 남아 있다는 것은 카드를 뽑는 행동 자체는 가능하다.
-   * 하지만 v1.9의 교착 판정에서는
-   * 단순한 draw 자체가 아니라
-   * 그 뒤 실제로 카드를 놓을 수 있는지도 함께 검사한다.
-   */
-  return game.stock.length>0;
-}
-
-
-function canPlaceFoundationInCurrentState(card){
-
-  if(!card)
-    return false;
-
-  const f=
-    game.foundations[card.suit];
-
-  if(!f.length){
-    return card.rank===1;
-  }
-
-  return
-    f[f.length-1].rank+1===card.rank;
-}
-
-
-function canPlaceOnAnyTableau(card){
-
-  if(!card || !card.faceUp)
-    return false;
-
-  for(
-    let di=0;
-    di<7;
-    di++
-  ){
-
-    const dest=
-      game.tableau[di];
-
-    if(
-      validTableau(
-        dest[dest.length-1],
-        card
-      )
-    ){
-      return true;
-    }
-  }
-
-  return false;
-}
-
-
-function canWasteCardProgress(card){
-
-  if(!card)
-    return false;
-
-  if(
-    canPlaceFoundationInCurrentState(card)
-  ){
-    return true;
-  }
-
-  if(
-    canPlaceOnAnyTableau(card)
-  ){
-    return true;
-  }
-
-  return false;
-}
-
-
-/*
- * 현재 Tableau에서 실제로 가능한 수가 있는지 검사한다.
- *
- * 포함하는 행동:
- * 1. 뒤집힌 카드 뒤집기
- * 2. Tableau -> Foundation
- * 3. Tableau -> Tableau
- */
-function hasAnyTableauOrFoundationMove(){
-
-  if(
-    !game ||
-    game.finished
-  ){
-    return false;
-  }
-
-  /* 뒤집을 수 있는 카드 */
-  for(
-    const col of game.tableau
-  ){
-
-    if(
-      col.length &&
-      !col[col.length-1].faceUp
-    ){
-      return true;
-    }
-  }
-
-  /* Tableau -> Foundation */
-  for(
-    const col of game.tableau
-  ){
-
-    if(!col.length)
-      continue;
-
-    const c=
-      col[col.length-1];
-
-    if(
-      c.faceUp &&
-      canPlaceFoundationInCurrentState(c)
-    ){
-      return true;
-    }
-  }
-
-  /* Tableau -> Tableau */
-  for(
-    let si=0;
-    si<7;
-    si++
-  ){
-
-    const col=
-      game.tableau[si];
-
-    for(
-      let ri=0;
-      ri<col.length;
-      ri++
-    ){
-
-      const c=
-        col[ri];
-
-      if(!c.faceUp)
-        continue;
-
-      const moving=
-        col.slice(ri);
-
-      if(
-        !isValidSequence(moving)
-      ){
-        continue;
-      }
-
-      for(
-        let di=0;
-        di<7;
-        di++
-      ){
-
-        if(si===di)
-          continue;
-
-        const dest=
-          game.tableau[di];
-
-        if(
-          validTableau(
-            dest[dest.length-1],
-            moving[0]
-          )
-        ){
-          return true;
-        }
-      }
-    }
-  }
-
-  return false;
-}
-
-
-/*
- * 현재 Waste의 모든 카드를 가상으로 한 장씩
- * 맨 위에 올려 놓았다고 보고 검사한다.
- *
- * Stock이 비어 있을 때 recycle을 하면
- * Waste의 각 카드가 결국 차례대로 노출될 수 있으므로
- * 맨 위 카드 하나만 보는 것보다 정확하다.
- */
-function hasAnyWasteCardProgress(){
-
-  if(
-    !game ||
-    !game.waste.length
-  ){
-    return false;
-  }
-
-  for(
-    const card of game.waste
-  ){
-
-    const testCard={
-      ...card,
-      faceUp:true
-    };
-
-    if(
-      canWasteCardProgress(testCard)
-    ){
-      return true;
-    }
-  }
-
-  return false;
-}
-
-
-/*
- * Stock의 카드들을 실제 draw 순서대로 가상 노출한다.
- *
- * drawStock()은 stock.pop()이므로
- * 배열의 뒤쪽 카드부터 검사한다.
- * 각 카드는 현재 Tableau/Foundation에 놓을 수 있는지 확인한다.
- *
- * 중요한 점:
- * - 단순히 stock.length > 0이면 true가 아니다.
- * - Stock의 모든 카드가 현재 상태에서 어디에도 놓일 수 없다면
- *   Stock을 전부 소모해도 실질적인 진행이 없다.
- */
-function hasAnyStockCardProgress(){
-
-  if(
-    !game ||
-    !game.stock.length
-  ){
-    return false;
-  }
-
-  for(
-    let i=game.stock.length-1;
-    i>=0;
-    i--
-  ){
-
-    const card={
-      ...game.stock[i],
-      faceUp:true
-    };
-
-    if(
-      canWasteCardProgress(card)
-    ){
-      return true;
-    }
-  }
-
-  return false;
-}
-
-
-/*
- * 현재 게임에서 실제로 의미 있는 진행 수가 있는지 검사한다.
- *
- * Stock이 있으면:
- *   - 현재 Waste의 카드 이동 가능성
- *   - Stock의 모든 카드를 가상 draw하여 이동 가능성
- *   - Tableau/Foundation 이동
- *
- * Stock이 없고 Waste가 있으면:
- *   - 현재 Waste 및 recycle 후 노출될 카드 이동 가능성
- *   - Tableau/Foundation 이동
- *
- * Stock과 Waste가 모두 없으면:
- *   - Tableau/Foundation 이동만 검사
- */
-function hasAnyLegalMove(){
-
-  if(
-    !game ||
-    game.finished
-  ){
-    return false;
-  }
-
-  /* Tableau 쪽에서 움직일 수 있으면 진행 가능 */
-  if(
-    hasAnyTableauOrFoundationMove()
-  ){
-    return true;
-  }
-
-  /* 현재 Waste 카드가 이동 가능 */
-  if(
-    game.waste.length &&
-    canWasteCardProgress(
-      game.waste[game.waste.length-1]
-    )
-  ){
-    return true;
-  }
-
-  /*
-   * Stock에 있는 카드 중 하나라도
-   * 노출되었을 때 실제로 이동할 수 있으면 진행 가능.
-   */
-  if(
-    hasAnyStockCardProgress()
-  ){
-    return true;
-  }
-
-  /*
-   * Stock이 비어 있으면 Waste를 recycle할 수 있다.
-   * recycle 후 각 Waste 카드가 차례로 노출될 수 있으므로
-   * 전체 Waste를 검사한다.
-   */
-  if(
-    !game.stock.length &&
-    game.waste.length &&
-    hasAnyWasteCardProgress()
-  ){
-    return true;
-  }
-
   return false;
 }
 
 
 /* =========================================================
    교착 검사
-   Solitaire v1.9
+   Solitaire v2.0
    ========================================================= */
 
 function checkStuck(){
-
-  if(
-    !game ||
-    game.finished ||
-    autoFinishing
-  ){
-    return false;
-  }
-
   /*
-   * 실제로 새로운 진행 수가 있는지 확인한다.
-   *
-   * v1.8의 문제:
-   *   stock.length > 0이면 무조건 진행 가능으로 판단했다.
-   *
-   * v1.9에서는 Stock의 카드들을 가상으로 노출하여
-   * 실제 이동 가능한 카드가 있는지까지 검사한다.
+   * v2.0: 자동 실패 판정을 완전히 비활성화합니다.
+   * 사용자가 실제로 할 수 있는 수가 남아 있는데 게임이
+   * 잘못 종료되는 문제를 방지합니다.
+   * 승리 판정(checkWin)은 별도로 정상 동작합니다.
    */
-  if(
-    !hasAnyLegalMove()
-  ){
-
-    finishFailure(
-      '더 이상 실제로 진행할 수 있는 수가 없습니다.',
-      `Stock/Waste를 포함한 가능한 이동 없음 · 총 ${game.moves}수`
-    );
-
-    return true;
-  }
-
-  /*
-   * 실제 진행 수가 있더라도
-   * Stock/Waste를 포함한 전체 게임 상태가
-   * 이전 상태와 정확히 같아졌다면 순환으로 판단한다.
-   *
-   * 단, checkRepeatedGameState() 내부에서도
-   * 동일한 방어 조건을 두어 안전하게 처리한다.
-   */
-  if(
-    checkRepeatedGameState()
-  ){
-    return true;
-  }
-
   return false;
 }
 
@@ -4476,93 +4020,9 @@ function checkStuck(){
    실패 처리
    ========================================================= */
 
-function finishFailure(
-  title=
-    '더 이상 진행할 수 있는 수가 없어 게임을 끝냈어요.',
-  detail=''
-){
-
-  if(
-    !game ||
-    game.finished
-  ){
-
-    return;
-
-  }
-
-
-  game.finished=true;
-
-
-  clearInterval(
-    timerInterval
-  );
-
-
-  selected=null;
-
-  dragState=null;
-
-
-  clearLegalTargets();
-
-
-  const ms=
-    getPlayTimeMs();
-
-
-  $('timer').textContent=
-    formatTime(ms);
-
-
-  $('finish-box').innerHTML=`
-
-    <div class="fail-banner">
-
-      💥 실패
-
-      <small>
-        ${esc(title)}
-        <br>
-        기록 ${formatTime(ms)}
-        · 총 ${game.moves}수
-        ${
-          detail
-            ? `<br>${esc(detail)}`
-            : ''
-        }
-      </small>
-
-    </div>
-
-  `;
-
-
-  document
-    .querySelector(
-      '.solitaire-wrap'
-    )
-    ?.classList.add(
-      'game-failed'
-    );
-
-
-  setTimeout(
-    ()=>
-      document
-        .querySelector(
-          '.solitaire-wrap'
-        )
-        ?.classList.remove(
-          'game-failed'
-        ),
-    900
-  );
-
-
-  renderGame();
-
+function finishFailure(){
+  /* v2.0: 자동 실패 기능은 비활성화되었습니다. */
+  return false;
 }
 
 
@@ -4571,19 +4031,14 @@ function finishFailure(
    ========================================================= */
 
 function afterMoveCheck(){
-
   /*
-   * 먼저 클리어 여부 확인
+   * v2.0에서는 승리 여부만 확인합니다.
+   * 자동 실패/교착/반복 상태 판정은 사용하지 않습니다.
    */
   if(checkWin())
     return true;
 
-
-  /*
-   * 그 다음 교착 + 반복 상태 검사
-   */
-  return checkStuck();
-
+  return false;
 }
 
 
