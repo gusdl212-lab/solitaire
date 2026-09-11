@@ -489,7 +489,7 @@ button:hover{
   }
 }
 
-/* ===== Solitaire v2.0 : 드래그앤드롭 / 카드 모션 / UI ===== */
+/* ===== Solitaire v2.1 : 드래그앤드롭 / 카드 모션 / UI ===== */
 
 .container{
   max-width:1280px
@@ -862,7 +862,7 @@ body.game-paused #timer{
   }
 }
 
-/* ===== Solitaire v2.0 : 반복 상태 실패 안내 ===== */
+/* ===== Solitaire v2.1 : 반복 상태 실패 안내 ===== */
 
 .repeat-fail-banner{
   background:rgba(226,85,85,.14);
@@ -985,7 +985,7 @@ body.game-paused #timer{
 
 <div class="status-bar">
   <span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span>
-  <span style="color:#66fcf1;font-weight:900">Solitaire v2.0</span>
+  <span style="color:#66fcf1;font-weight:900">Solitaire v2.1</span>
 </div>
 
 <!-- ================= 로그인 ================= -->
@@ -1503,7 +1503,7 @@ let undoStack=[];
 
 
 /* =========================================================
-   Solitaire v2.0
+   Solitaire v2.1
    반복 게임 상태 기록
    ========================================================= */
 
@@ -2020,6 +2020,22 @@ function afterLogin(){
   $('my-profile-name').textContent=
     displayName(currentUser.id);
 
+  /*
+   * 과거 버전에서 잘못 저장된 0초 기록을 제거한다.
+   * 정상적인 솔리테어 완료 기록은 항상 0초보다 크므로
+   * 현재 로그인한 사용자의 0초/잘못된 기록만 삭제한다.
+   */
+  const myRecord=globalData.rankings?.[currentUser.id];
+  if(
+    myRecord &&
+    (!Number.isFinite(Number(myRecord.bestMs)) || Number(myRecord.bestMs)<=0)
+  ){
+    if(globalData.rankings)
+      delete globalData.rankings[currentUser.id];
+
+    remove(`${RANK_PATH}/${currentUser.id}`);
+  }
+
   switchView('view-lobby');
 
   startSync();
@@ -2471,7 +2487,8 @@ function rankingArray(){
     x=>
       x &&
       x.userId &&
-      Number.isFinite(x.bestMs)
+      Number.isFinite(Number(x.bestMs)) &&
+      Number(x.bestMs)>0
   )
   .sort(
     (a,b)=>
@@ -2671,6 +2688,17 @@ function startNewGame(){
 
   clearInterval(timerInterval);
 
+  /*
+   * 새 게임은 이전 게임의 타이머/일시정지 상태를
+   * 절대로 이어받지 않도록 완전히 초기화한다.
+   * 특히 이전 게임이 일시정지된 상태에서 새 게임을
+   * 시작하면 paused=true와 오래된 pauseStartedAt 때문에
+   * getPlayTimeMs()가 계속 0을 반환할 수 있었다.
+   */
+  paused=false;
+  pauseStartedAt=0;
+  totalPausedMs=0;
+  document.body.classList.remove('game-paused');
 
   autoFinishing=false;
 
@@ -2681,7 +2709,7 @@ function startNewGame(){
   dragState=null;
 
 
-  /* v2.0 반복 상태 기록 초기화 */
+  /* v2.1 반복 상태 기록 초기화 */
   seenGameStates=new Map();
 
   lastStateKey='';
@@ -2772,6 +2800,8 @@ function startNewGame(){
 
   $('finish-box').innerHTML='';
 
+  /* 첫 화면부터 0초로 정확히 시작하고 500ms 후에도 계속 증가한다. */
+  $('timer').textContent='00:00';
 
   renderGame();
 
@@ -3863,7 +3893,7 @@ function undoMove(){
 
 
 /* =========================================================
-   Solitaire v2.0
+   Solitaire v2.1
    게임 상태를 고유 문자열로 변환
    ========================================================= */
 
@@ -3948,7 +3978,7 @@ function getGameStateKey(){
 
 
 /* =========================================================
-   Solitaire v2.0
+   Solitaire v2.1
    새로운 게임 상태 기록 초기화
    ========================================================= */
 
@@ -3983,13 +4013,13 @@ function resetSeenGameStates(){
 
 
 /* =========================================================
-   Solitaire v2.0
+   Solitaire v2.1
    반복 상태 감지
    ========================================================= */
 
 function checkRepeatedGameState(){
   /*
-   * v2.0에서는 자동 실패 판정을 하지 않습니다.
+   * v2.1에서는 자동 실패 판정을 하지 않습니다.
    *
    * 같은 상태로 돌아오는 것은 Undo/Recycle/Stock 진행 과정에서
    * 정상적으로 발생할 수 있고, 클라이언트가 현재 상태만으로
@@ -4002,12 +4032,12 @@ function checkRepeatedGameState(){
 
 /* =========================================================
    교착 검사
-   Solitaire v2.0
+   Solitaire v2.1
    ========================================================= */
 
 function checkStuck(){
   /*
-   * v2.0: 자동 실패 판정을 완전히 비활성화합니다.
+   * v2.1: 자동 실패 판정을 완전히 비활성화합니다.
    * 사용자가 실제로 할 수 있는 수가 남아 있는데 게임이
    * 잘못 종료되는 문제를 방지합니다.
    * 승리 판정(checkWin)은 별도로 정상 동작합니다.
@@ -4021,7 +4051,7 @@ function checkStuck(){
    ========================================================= */
 
 function finishFailure(){
-  /* v2.0: 자동 실패 기능은 비활성화되었습니다. */
+  /* v2.1: 자동 실패 기능은 비활성화되었습니다. */
   return false;
 }
 
@@ -4032,7 +4062,7 @@ function finishFailure(){
 
 function afterMoveCheck(){
   /*
-   * v2.0에서는 승리 여부만 확인합니다.
+   * v2.1에서는 승리 여부만 확인합니다.
    * 자동 실패/교착/반복 상태 판정은 사용하지 않습니다.
    */
   if(checkWin())
