@@ -489,7 +489,7 @@ button:hover{
   }
 }
 
-/* ===== Solitaire v2.1 : 드래그앤드롭 / 카드 모션 / UI ===== */
+/* ===== Solitaire v2.2 : 드래그앤드롭 / 카드 모션 / UI ===== */
 
 .container{
   max-width:1280px
@@ -862,7 +862,7 @@ body.game-paused #timer{
   }
 }
 
-/* ===== Solitaire v2.1 : 반복 상태 실패 안내 ===== */
+/* ===== Solitaire v2.2 : 반복 상태 실패 안내 ===== */
 
 .repeat-fail-banner{
   background:rgba(226,85,85,.14);
@@ -985,7 +985,7 @@ body.game-paused #timer{
 
 <div class="status-bar">
   <span>🌐 기존 게임 계정 그대로 · 개인 기록 경쟁</span>
-  <span style="color:#66fcf1;font-weight:900">Solitaire v2.1</span>
+  <span style="color:#66fcf1;font-weight:900">Solitaire v2.2</span>
 </div>
 
 <!-- ================= 로그인 ================= -->
@@ -1487,6 +1487,8 @@ let game=null;
 
 let timerInterval=null;
 
+let syncInFlight=false;
+
 let startedAt=0;
 
 let selected=null;
@@ -1503,7 +1505,7 @@ let undoStack=[];
 
 
 /* =========================================================
-   Solitaire v2.1
+   Solitaire v2.2
    반복 게임 상태 기록
    ========================================================= */
 
@@ -1535,53 +1537,33 @@ function esc(s){
 }
 
 
-async function save(path,data){
-
+async function save(path,data,timeoutMs=4000){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
-
-    const r=await fetch(
-      `${FIREBASE_BASE_URL}/${path}.json`,
-      {
-        method:'PUT',
-        headers:{
-          'Content-Type':'application/json'
-        },
-        body:JSON.stringify(data)
-      }
-    );
-
+    const r=await fetch(`${FIREBASE_BASE_URL}/${path}.json`,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(data),
+      signal:controller.signal,
+      cache:'no-store'
+    });
     return r.ok;
-
   }catch(e){
-
-    console.error(e);
-
+    if(e?.name!=='AbortError')console.warn('Firebase 저장 실패:',e);
     return false;
-
-  }
-
+  }finally{clearTimeout(timer);}
 }
 
-
-async function remove(path){
-
+async function remove(path,timeoutMs=4000){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{
-
-    await fetch(
-      `${FIREBASE_BASE_URL}/${path}.json`,
-      {
-        method:'DELETE'
-      }
-    );
-
+    await fetch(`${FIREBASE_BASE_URL}/${path}.json`,{method:'DELETE',signal:controller.signal,cache:'no-store'});
   }catch(e){
-
-    console.error(e);
-
-  }
-
+    if(e?.name!=='AbortError')console.warn('Firebase 삭제 실패:',e);
+  }finally{clearTimeout(timer);}
 }
-
 
 function switchView(id){
 
@@ -1714,120 +1696,53 @@ window.addEventListener(
    ========================================================= */
 
 async function fetchSystemData(){
-
+  // v2.2: Firebase가 느리거나 끊겨도 게임 자체는 절대 기다리지 않는다.
+  if(syncInFlight)return false;
+  syncInFlight=true;
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),3500);
   try{
-
-    const r=
-      await fetch(
-        `${FIREBASE_BASE_URL}.json`
-      );
-
-    if(r.ok){
-
-      const d=
-        await r.json()||{};
-
-      globalData.users=
-        d.users||{};
-
-      globalData.lobbyChat=
-        d.lobbyChat||[];
-
-      globalData.rankings=
-        d[RANK_PATH]||{};
-
-    }
-
+    const r=await fetch(`${FIREBASE_BASE_URL}.json`,{signal:controller.signal,cache:'no-store'});
+    if(!r.ok)return false;
+    const d=await r.json()||{};
+    globalData.users=d.users||{};
+    globalData.lobbyChat=d.lobbyChat||[];
+    globalData.rankings=d[RANK_PATH]||{};
+    if(!globalData.users[ADMIN_ID])globalData.users[ADMIN_ID]={id:ADMIN_ID,pw:'tmdgus12!@',email:'admin@korea.kr',lastActive:0};
+    if(currentUser&&globalData.users[currentUser.id])currentUser=globalData.users[currentUser.id];
+    if(currentUser&&!$('view-lobby').classList.contains('hidden'))renderLobby();
+    if(currentUser&&!$('view-game').classList.contains('hidden'))renderRankings();
+    return true;
   }catch(e){
-
-    console.error(e);
-
+    if(e?.name!=='AbortError')console.warn('Firebase 동기화 실패:',e);
+    return false;
+  }finally{
+    clearTimeout(timeout);
+    syncInFlight=false;
   }
-
-
-  if(
-    !globalData.users[ADMIN_ID]
-  ){
-
-    globalData.users[ADMIN_ID]={
-      id:ADMIN_ID,
-      pw:"tmdgus12!@",
-      email:"admin@korea.kr",
-      lastActive:0
-    };
-
-  }
-
-
-  if(
-    currentUser &&
-    globalData.users[currentUser.id]
-  ){
-
-    currentUser=
-      globalData.users[currentUser.id];
-
-  }
-
-
-  if(
-    currentUser &&
-    !$('view-lobby').classList.contains('hidden')
-  ){
-
-    renderLobby();
-
-  }
-
-
-  if(
-    currentUser &&
-    !$('view-game').classList.contains('hidden')
-  ){
-
-    renderRankings();
-
-  }
-
 }
-
 
 function startSync(){
-
   clearInterval(syncInterval);
-
   clearInterval(heartbeatInterval);
 
+  // v2.2: 1.8초마다 전체 DB를 반복 조회하던 구조를 제거한다.
+  // 솔리테어 플레이 자체는 로컬에서 동작하므로 네트워크 상태가 게임을 막지 않게 한다.
+  syncInterval=setInterval(()=>{
+    if(currentUser&&!$('view-game').classList.contains('hidden'))return;
+    fetchSystemData();
+  },10000);
 
-  syncInterval=
-    setInterval(
-      fetchSystemData,
-      1800
-    );
+  // 접속 상태 갱신도 3초 → 15초로 완화한다.
+  heartbeatInterval=setInterval(()=>{
+    if(currentUser&&!$('view-game').classList.contains('hidden')){
+      save(`users/${currentUser.id}/lastActive`,Date.now(),3000);
+    }
+  },15000);
 
-
-  heartbeatInterval=
-    setInterval(
-      ()=>
-        currentUser &&
-        save(
-          `users/${currentUser.id}/lastActive`,
-          Date.now()
-        ),
-      3000
-    );
-
-
-  save(
-    `users/${currentUser.id}/lastActive`,
-    Date.now()
-  );
-
-
+  save(`users/${currentUser.id}/lastActive`,Date.now(),3000);
   fetchSystemData();
-
 }
-
 
 /* =========================================================
    회원가입
@@ -2709,7 +2624,7 @@ function startNewGame(){
   dragState=null;
 
 
-  /* v2.1 반복 상태 기록 초기화 */
+  /* v2.2 반복 상태 기록 초기화 */
   seenGameStates=new Map();
 
   lastStateKey='';
@@ -3893,7 +3808,7 @@ function undoMove(){
 
 
 /* =========================================================
-   Solitaire v2.1
+   Solitaire v2.2
    게임 상태를 고유 문자열로 변환
    ========================================================= */
 
@@ -3978,7 +3893,7 @@ function getGameStateKey(){
 
 
 /* =========================================================
-   Solitaire v2.1
+   Solitaire v2.2
    새로운 게임 상태 기록 초기화
    ========================================================= */
 
@@ -4013,7 +3928,7 @@ function resetSeenGameStates(){
 
 
 /* =========================================================
-   Solitaire v2.1
+   Solitaire v2.2
    반복 상태 감지
    ========================================================= */
 
@@ -4032,7 +3947,7 @@ function checkRepeatedGameState(){
 
 /* =========================================================
    교착 검사
-   Solitaire v2.1
+   Solitaire v2.2
    ========================================================= */
 
 function checkStuck(){
@@ -6030,14 +5945,17 @@ async function finishGame(){
     ms<old.bestMs
   ){
 
-    await save(
+    save(
       `${RANK_PATH}/${currentUser.id}`,
       {
         userId:currentUser.id,
         bestMs:ms,
         updatedAt:Date.now()
-      }
+      },
+      4000
     );
+    globalData.rankings=globalData.rankings||{};
+    globalData.rankings[currentUser.id]={userId:currentUser.id,bestMs:ms,updatedAt:Date.now()};
 
 
     $('finish-box').innerHTML=`
